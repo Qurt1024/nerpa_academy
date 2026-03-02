@@ -4,16 +4,11 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../utils/logger.dart';
 
 /// Обёртка над [FirebaseAuth] и [GoogleSignIn].
-///
-/// Зачем нужна обёртка, а не прямые вызовы?
-/// 1. Если Firebase заменится другим сервисом — меняем только этот файл.
-/// 2. Логирование и обработка ошибок в одном месте.
-/// 3. Тестирование — проще подменить один сервис, чем весь Firebase.
+
 class FirebaseAuthService {
   /// Экземпляр FirebaseAuth (работа с авторизацией).
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  /// Экземпляр GoogleSignIn (синглтон в v7).
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 
   // ── Текущий пользователь ─────────────────────────────────────
@@ -34,37 +29,33 @@ class FirebaseAuthService {
   /// Возвращает [UserCredential] при успехе или `null`,
   /// если пользователь отменил выбор аккаунта.
   Future<UserCredential?> signInWithGoogle() async {
-    try {
-      // 1. Открываем окно выбора Google-аккаунта (v7 API).
-      final GoogleSignInAccount googleUser =
-          await _googleSignIn.authenticate();
+  try {
 
-      // 2. Получаем idToken из аккаунта.
-      final GoogleSignInAuthentication googleAuth =
-          googleUser.authentication;
+    await GoogleSignIn.instance.initialize(
+      serverClientId: '798023548630-nbma0k2asoh4nku95m4kmhh3524e77k5.apps.googleusercontent.com',
+    );
 
-      // 3. Создаём credential для Firebase.
-      final OAuthCredential credential = GoogleAuthProvider.credential(
-        idToken: googleAuth.idToken,
-      );
+    final GoogleSignInAccount googleUser =
+        await GoogleSignIn.instance.authenticate();
 
-      // 4. Входим в Firebase с Google credential.
-      final UserCredential userCredential =
-          await _auth.signInWithCredential(credential);
+    final GoogleSignInAuthentication googleAuth =
+        await googleUser.authentication; // ← make sure await is here
 
-      AppLogger.info(
-        'Google Sign-In: успешный вход — ${userCredential.user?.email}',
-      );
-      return userCredential;
-    } catch (error, stackTrace) {
-      AppLogger.error(
-        'Google Sign-In: ошибка входа',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      rethrow;
-    }
+    final OAuthCredential credential = GoogleAuthProvider.credential(
+      idToken: googleAuth.idToken,
+    );
+
+    final UserCredential userCredential =
+        await _auth.signInWithCredential(credential);
+
+    AppLogger.info('Google Sign-In: успешный вход — ${userCredential.user?.email}');
+    return userCredential;
+
+  } catch (error, stackTrace) {
+    AppLogger.error('Google Sign-In: ошибка входа', error: error, stackTrace: stackTrace);
+    rethrow;
   }
+}
 
   // ── Выход ────────────────────────────────────────────────────
 

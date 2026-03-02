@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "798023548630",
+    "project_id": "nerpa-academy",
+    "storage_bucket": "nerpa-academy.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:798023548630:android:854f16ccbf8d6c0bdbd377",
+        "android_client_info": {
+          "package_name": "com.example.nerpa_academy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBXDE8H1p-zFeIxWW0t2YeZhDJNyUCcJaQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
