@@ -4,33 +4,35 @@ import 'package:go_router/go_router.dart';
 import '../../features/home/ui/home_shell.dart';
 import '../../features/home/ui/main_tab.dart';
 import '../../features/home/ui/profile_tab.dart';
+import '../../features/lesson_detail/ui/lesson_detail_screen.dart';
+import '../../features/lessons/ui/lessons_screen.dart';
 import '../../features/login/ui/login_screen.dart';
+import '../../features/quiz/ui/quiz_screen.dart';
+import '../../features/signup/ui/sign_up_screen.dart';
+import '../../features/signup/ui/subject_picker_screen.dart';
 import '../../features/splash/ui/splash_screen.dart';
 import 'route_names.dart';
 
 /// Конфигурация навигации (GoRouter).
 ///
-/// Структура маршрутов:
+/// Полная структура маршрутов:
 /// ```
-/// /               → SplashScreen
-/// /login          → LoginScreen
-/// /home           → HomeShell (ShellRoute с BottomNavigationBar)
-///   /home/main    → MainTab
-///   /home/profile → ProfileTab
+/// /                              → SplashScreen
+/// /login                         → LoginScreen
+/// /signup                        → SignUpScreen
+/// /signup/subjects               → SubjectPickerScreen
+/// /home (ShellRoute)
+///   /home/main                   → MainTab
+///   /home/profile                → ProfileTab
+/// /subjects/:subjectId/lessons              → LessonsScreen
+/// /subjects/:subjectId/lessons/:lessonId    → LessonDetailScreen
+/// /subjects/:subjectId/lessons/:lessonId/quiz → QuizScreen
 /// ```
-///
-/// **Redirect guard**: если пользователь попал на `/home/*`
-/// без авторизации, его перекинет на `/login` (и наоборот).
-/// Но основная навигация при смене auth-статуса идёт через
-/// BlocListener в экранах — это явнее и проще для понимания.
 class AppRouter {
-  /// Создаёт и возвращает настроенный [GoRouter].
   static GoRouter create() {
     return GoRouter(
-      // Начальный маршрут — сплэш.
       initialLocation: RouteNames.splash,
 
-      // Список маршрутов.
       routes: [
         // ── Splash ───────────────────────────────────────────
         GoRoute(
@@ -44,6 +46,21 @@ class AppRouter {
           name: RouteNames.loginName,
           path: RouteNames.login,
           builder: (context, state) => const LoginScreen(),
+        ),
+
+        // ── Sign Up 1 → Sign Up 2 (вложенный) ────────────────
+        GoRoute(
+          name: RouteNames.signupName,
+          path: RouteNames.signup,
+          builder: (context, state) => const SignUpScreen(),
+          routes: [
+            GoRoute(
+              name: RouteNames.subjectPickerName,
+              // Относительный путь от родителя: /signup/subjects
+              path: 'subjects',
+              builder: (context, state) => const SubjectPickerScreen(),
+            ),
+          ],
         ),
 
         // ── Home (ShellRoute + BottomNav) ────────────────────
@@ -62,14 +79,61 @@ class AppRouter {
             ),
           ],
         ),
+
+        // ── Lessons list ──────────────────────────────────────
+        GoRoute(
+          name: RouteNames.lessonsName,
+          path: RouteNames.lessons,
+          builder: (context, state) {
+            final subjectId =
+                state.pathParameters[RouteNames.subjectIdParam]!;
+            return LessonsScreen(subjectId: subjectId);
+          },
+
+          // ── Lesson detail + Quiz (вложены, чтобы кнопка «Назад»
+          //    работала корректно) ─────────────────────────────
+          routes: [
+            GoRoute(
+              name: RouteNames.lessonDetailName,
+              // Относительный путь: /subjects/:subjectId/lessons/:lessonId
+              path: ':${RouteNames.lessonIdParam}',
+              builder: (context, state) {
+                final subjectId =
+                    state.pathParameters[RouteNames.subjectIdParam]!;
+                final lessonId =
+                    state.pathParameters[RouteNames.lessonIdParam]!;
+                return LessonDetailScreen(
+                  subjectId: subjectId,
+                  lessonId: lessonId,
+                );
+              },
+              routes: [
+                GoRoute(
+                  name: RouteNames.quizName,
+                  // Относительный путь: quiz
+                  path: 'quiz',
+                  builder: (context, state) {
+                    final subjectId =
+                        state.pathParameters[RouteNames.subjectIdParam]!;
+                    final lessonId =
+                        state.pathParameters[RouteNames.lessonIdParam]!;
+                    return QuizScreen(
+                      subjectId: subjectId,
+                      lessonId: lessonId,
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
       ],
 
       // ── Страница ошибки (404) ──────────────────────────────
-      // Стиль текста берём из темы, чтобы он вписывался в дизайн.
       errorBuilder: (context, state) => Scaffold(
         body: Center(
           child: Text(
-            'Страница не найдена: ${state.uri}',
+            'Page not found: ${state.uri}',
             style: Theme.of(context).textTheme.bodyLarge,
           ),
         ),

@@ -1,16 +1,11 @@
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-/// Модель пользователя.
+/// Модель пользователя — расширена полями для обучения.
 ///
-/// Используется в BLoC-состояниях и для передачи данных
-/// между слоями. Расширяет [Equatable], чтобы BLoC мог
-/// корректно сравнивать состояния (== работает по полям).
-///
-/// Три фабричных конструктора:
-/// - [fromJson]  — из Map (Firestore).
-/// - [toJson]    — в Map (для сохранения в Firestore).
-/// - [fromFirebaseUser] — из объекта [User] (FirebaseAuth).
+/// Новые поля по сравнению с исходной версией:
+/// - [selectedSubjectIds] — список ID предметов, выбранных на экране Sign Up 2.
+/// - [hearts] — количество жизней (аналог Duolingo); при ошибке в квизе уменьшается.
 class UserModel extends Equatable {
   /// Уникальный идентификатор (совпадает с uid в FirebaseAuth).
   final String uid;
@@ -24,15 +19,26 @@ class UserModel extends Equatable {
   /// URL аватара (может быть пустой строкой).
   final String photoUrl;
 
+  /// ID предметов, выбранных пользователем при регистрации.
+  /// Показываются на главном экране как список карточек.
+  final List<String> selectedSubjectIds;
+
+  /// Текущее количество жизней (hearts).
+  /// Максимум определяется в [AppConstants.maxHearts].
+  /// При ошибке в квизе уменьшается на 1.
+  final int hearts;
+
   const UserModel({
     required this.uid,
     required this.displayName,
     required this.email,
     required this.photoUrl,
+    this.selectedSubjectIds = const [],
+    this.hearts = 5,
   });
 
   /// Пустой пользователь — используется как дефолтное значение
-  /// вместо `null` (удобнее проверять `user == UserModel.empty`).
+  /// вместо `null`.
   static const UserModel empty = UserModel(
     uid: '',
     displayName: '',
@@ -40,25 +46,23 @@ class UserModel extends Equatable {
     photoUrl: '',
   );
 
-  /// Пользователь пустой?
   bool get isEmpty => this == empty;
-
-  /// Пользователь НЕ пустой?
   bool get isNotEmpty => this != empty;
 
   // ── Фабрики ──────────────────────────────────────────────────
 
-  /// Создать [UserModel] из Map (обычно из Firestore-документа).
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       uid: json['uid'] as String? ?? '',
       displayName: json['displayName'] as String? ?? '',
       email: json['email'] as String? ?? '',
       photoUrl: json['photoUrl'] as String? ?? '',
+      selectedSubjectIds:
+          List<String>.from(json['selectedSubjectIds'] as List? ?? []),
+      hearts: json['hearts'] as int? ?? 5,
     );
   }
 
-  /// Создать [UserModel] из [User] (FirebaseAuth).
   factory UserModel.fromFirebaseUser(User user) {
     return UserModel(
       uid: user.uid,
@@ -68,17 +72,34 @@ class UserModel extends Equatable {
     );
   }
 
-  /// Конвертировать в Map (для сохранения в Firestore).
-  Map<String, dynamic> toJson() {
-    return {
-      'uid': uid,
-      'displayName': displayName,
-      'email': email,
-      'photoUrl': photoUrl,
-    };
+  Map<String, dynamic> toJson() => {
+        'uid': uid,
+        'displayName': displayName,
+        'email': email,
+        'photoUrl': photoUrl,
+        'selectedSubjectIds': selectedSubjectIds,
+        'hearts': hearts,
+      };
+
+  UserModel copyWith({
+    String? uid,
+    String? displayName,
+    String? email,
+    String? photoUrl,
+    List<String>? selectedSubjectIds,
+    int? hearts,
+  }) {
+    return UserModel(
+      uid: uid ?? this.uid,
+      displayName: displayName ?? this.displayName,
+      email: email ?? this.email,
+      photoUrl: photoUrl ?? this.photoUrl,
+      selectedSubjectIds: selectedSubjectIds ?? this.selectedSubjectIds,
+      hearts: hearts ?? this.hearts,
+    );
   }
 
-  /// Equatable — список полей для сравнения.
   @override
-  List<Object?> get props => [uid, displayName, email, photoUrl];
+  List<Object?> get props =>
+      [uid, displayName, email, photoUrl, selectedSubjectIds, hearts];
 }
