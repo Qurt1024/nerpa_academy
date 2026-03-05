@@ -56,6 +56,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: dotenv.env['ANDROID_MESSAGING_SENDER_ID']!,
     projectId: dotenv.env['ANDROID_PROJECT_ID']!,
     storageBucket: dotenv.env['ANDROID_STORAGE_BUCKET']!,
+    databaseURL: dotenv.env['RTDB_URL']!,
   );
 
   static final FirebaseOptions ios = FirebaseOptions(
@@ -65,5 +66,6 @@ class DefaultFirebaseOptions {
     projectId: dotenv.env['IOS_PROJECT_ID']!,
     storageBucket: dotenv.env['IOS_STORAGE_BUCKET']!,
     iosBundleId: dotenv.env['IOS_BUNDLE_ID']!,
+    databaseURL: dotenv.env['RTDB_URL']!,
   );
 }

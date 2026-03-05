@@ -1,115 +1,106 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import '../models/models.dart';
 
-import '../../core/services/firebase_auth_service.dart';
-import '../../core/services/firestore_service.dart';
-import '../../core/utils/logger.dart';
-import '../models/user_model.dart';
-
-/// Репозиторий авторизации — координирует Auth + Firestore.
 class AuthRepository {
-  AuthRepository._();
-  static final AuthRepository instance = AuthRepository._();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
-  final FirebaseAuthService _authService = FirebaseAuthService();
-  final FirestoreService _firestoreService = FirestoreService();
+  Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  UserModel get currentUser {
-    final User? firebaseUser = _authService.currentUser;
-    if (firebaseUser == null) return UserModel.empty;
-    return UserModel.fromFirebaseUser(firebaseUser);
+  User? get currentUser => _auth.currentUser;
+
+  Future<UserModel> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    final credential = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    return _fetchOrCreateUser(credential.user!);
   }
 
-  bool get isLoggedIn => _authService.currentUser != null;
+  Future<UserModel> signUpWithEmail({
+    required String email,
+    required String password,
+    required List<String> subjectIds,
+  }) async {
+    final credential = await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    final user = credential.user!;
+    final userModel = UserModel(
+      uid: user.uid,
+      email: email,
+      selectedSubjectIds: subjectIds,
+      createdAt: DateTime.now(),
+    );
+    await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .set(userModel.toMap());
+    return userModel;
+  }
 
-  Stream<UserModel> get authStateChanges {
-    return _authService.authStateChanges.map((User? firebaseUser) {
-      if (firebaseUser == null) return UserModel.empty;
-      return UserModel.fromFirebaseUser(firebaseUser);
+  Future<UserModel> signInWithGoogle() async {
+    final googleUser = await _googleSignIn.signIn();
+    if (googleUser == null) throw Exception('Google sign-in cancelled');
+
+    final googleAuth = await googleUser.authentication;
+    final credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
+    final userCredential = await _auth.signInWithCredential(credential);
+    return _fetchOrCreateUser(userCredential.user!);
+  }
+
+  Future<UserModel> _fetchOrCreateUser(User firebaseUser) async {
+    final doc = await _firestore
+        .collection('users')
+        .doc(firebaseUser.uid)
+        .get();
+
+    if (doc.exists) {
+      return UserModel.fromMap(doc.data()!);
+    }
+
+    final userModel = UserModel(
+      uid: firebaseUser.uid,
+      email: firebaseUser.email!,
+      displayName: firebaseUser.displayName,
+      photoUrl: firebaseUser.photoURL,
+      createdAt: DateTime.now(),
+    );
+    await _firestore
+        .collection('users')
+        .doc(firebaseUser.uid)
+        .set(userModel.toMap());
+    return userModel;
+  }
+
+  Future<UserModel?> fetchCurrentUser() async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    final doc =
+        await _firestore.collection('users').doc(user.uid).get();
+    if (!doc.exists) return null;
+    return UserModel.fromMap(doc.data()!);
+  }
+
+  Future<void> updateSelectedSubjects(
+      String uid, List<String> subjectIds) async {
+    await _firestore.collection('users').doc(uid).update({
+      'selectedSubjectIds': subjectIds,
     });
   }
 
-  // ── Email + Password ─────────────────────────────────────────
-
-  /// Регистрация через email + пароль.
-  /// После регистрации создаёт/обновляет профиль в Firestore.
-  Future<UserModel> signUpWithEmailAndPassword({
-    required String email,
-    required String password,
-  }) async {
-    try {
-      final cred = await _authService.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      if (cred.user == null) return UserModel.empty;
-
-      final user = UserModel.fromFirebaseUser(cred.user!);
-      await _firestoreService.saveUser(user.uid, user.toJson());
-
-      AppLogger.info('AuthRepository: registered — ${user.email}');
-      return user;
-    } catch (e, st) {
-      AppLogger.error('AuthRepository: signUp error', error: e, stackTrace: st);
-      rethrow;
-    }
-  }
-
-  /// Вход через email + пароль.
-  Future<UserModel> signInWithEmailAndPassword({
-    required String email,
-    required String password,
-  }) async {
-    try {
-      final cred = await _authService.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      if (cred.user == null) return UserModel.empty;
-
-      final user = UserModel.fromFirebaseUser(cred.user!);
-      await _firestoreService.saveUser(user.uid, user.toJson());
-
-      AppLogger.info('AuthRepository: signed in — ${user.email}');
-      return user;
-    } catch (e, st) {
-      AppLogger.error('AuthRepository: signIn error', error: e, stackTrace: st);
-      rethrow;
-    }
-  }
-
-  // ── Google ────────────────────────────────────────────────────
-
-  Future<UserModel> signInWithGoogle() async {
-    try {
-      final credential = await _authService.signInWithGoogle();
-      if (credential?.user == null) return UserModel.empty;
-
-      final user = UserModel.fromFirebaseUser(credential!.user!);
-      await _firestoreService.saveUser(user.uid, user.toJson());
-
-      AppLogger.info('AuthRepository: google sign-in — ${user.email}');
-      return user;
-    } catch (e, st) {
-      AppLogger.error('AuthRepository: google error', error: e, stackTrace: st);
-      rethrow;
-    }
-  }
-
-  // ── Reset Password ────────────────────────────────────────────
-
-  Future<void> sendPasswordResetEmail(String email) async {
-    await _authService.sendPasswordResetEmail(email);
-  }
-
-  // ── Sign Out ──────────────────────────────────────────────────
-
   Future<void> signOut() async {
-    try {
-      await _authService.signOut();
-      AppLogger.info('AuthRepository: signed out');
-    } catch (e, st) {
-      AppLogger.error('AuthRepository: signOut error', error: e, stackTrace: st);
-      rethrow;
-    }
+    await _googleSignIn.signOut();
+    await _auth.signOut();
   }
 }

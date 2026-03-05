@@ -1,143 +1,116 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/auth/bloc/auth_bloc.dart';
+import '../../features/auth/screens/auth_screens.dart';
+import '../../features/home/screens/home_screens.dart';
+import '../../features/lessons/screens/quiz_screens.dart';
+import '../../features/multiplayer/multiplayer.dart';
+import '../../features/chat/chat_profile_screens.dart';
 
-import '../../features/home/ui/home_shell.dart';
-import '../../features/home/ui/main_tab.dart';
-import '../../features/home/ui/profile_tab.dart';
-import '../../features/lesson_detail/ui/lesson_detail_screen.dart';
-import '../../features/lessons/ui/lessons_screen.dart';
-import '../../features/login/ui/login_screen.dart';
-import '../../features/quiz/ui/quiz_screen.dart';
-import '../../features/signup/ui/sign_up_screen.dart';
-import '../../features/signup/ui/subject_picker_screen.dart';
-import '../../features/splash/ui/splash_screen.dart';
-import 'route_names.dart';
-
-/// Конфигурация навигации (GoRouter).
-///
-/// Полная структура маршрутов:
-/// ```
-/// /                              → SplashScreen
-/// /login                         → LoginScreen
-/// /signup                        → SignUpScreen
-/// /signup/subjects               → SubjectPickerScreen
-/// /home (ShellRoute)
-///   /home/main                   → MainTab
-///   /home/profile                → ProfileTab
-/// /subjects/:subjectId/lessons              → LessonsScreen
-/// /subjects/:subjectId/lessons/:lessonId    → LessonDetailScreen
-/// /subjects/:subjectId/lessons/:lessonId/quiz → QuizScreen
-/// ```
 class AppRouter {
-  static GoRouter create() {
-    return GoRouter(
-      initialLocation: RouteNames.splash,
+  static GoRouter router(BuildContext context) => GoRouter(
+        initialLocation: '/',
+        redirect: (ctx, state) {
+          final authState = ctx.read<AuthBloc>().state;
+          final isAuth = authState is AuthAuthenticated;
+          final isAuthRoute =
+              state.matchedLocation.startsWith('/login') ||
+                  state.matchedLocation.startsWith('/signup') ||
+                  state.matchedLocation == '/';
 
-      routes: [
-        // ── Splash ───────────────────────────────────────────
-        GoRoute(
-          name: RouteNames.splashName,
-          path: RouteNames.splash,
-          builder: (context, state) => const SplashScreen(),
-        ),
+          if (!isAuth && !isAuthRoute) return '/';
+          if (isAuth && isAuthRoute) return '/home';
+          return null;
+        },
+        routes: [
+          // ── Auth ──────────────────────────────────────────────────────────
+          GoRoute(
+            path: '/',
+            builder: (_, __) => const WelcomeScreen(),
+          ),
+          GoRoute(
+            path: '/login',
+            builder: (_, __) => const LoginScreen(),
+          ),
+          GoRoute(
+            path: '/signup/step1',
+            builder: (_, __) => const SignUpStep1Screen(),
+          ),
+          GoRoute(
+            path: '/signup/step2',
+            builder: (_, state) {
+              final extra = state.extra as Map<String, String>;
+              return SignUpStep2Screen(
+                email: extra['email']!,
+                password: extra['password']!,
+              );
+            },
+          ),
 
-        // ── Login ────────────────────────────────────────────
-        GoRoute(
-          name: RouteNames.loginName,
-          path: RouteNames.login,
-          builder: (context, state) => const LoginScreen(),
-        ),
+          // ── Shell (Bottom Nav) ─────────────────────────────────────────────
+          ShellRoute(
+            builder: (_, __, child) => MainShell(child: child),
+            routes: [
+              GoRoute(
+                path: '/home',
+                builder: (_, __) => const HomeScreen(),
+              ),
+              GoRoute(
+                path: '/multiplayer',
+                builder: (_, __) => const MultiplayerHubScreen(),
+              ),
+              GoRoute(
+                path: '/profile',
+                builder: (_, __) => const ProfileScreen(),
+              ),
+            ],
+          ),
 
-        // ── Sign Up 1 → Sign Up 2 (вложенный) ────────────────
-        GoRoute(
-          name: RouteNames.signupName,
-          path: RouteNames.signup,
-          builder: (context, state) => const SignUpScreen(),
-          routes: [
-            GoRoute(
-              name: RouteNames.subjectPickerName,
-              // Относительный путь от родителя: /signup/subjects
-              path: 'subjects',
-              builder: (context, state) => const SubjectPickerScreen(),
+          // ── Lessons ───────────────────────────────────────────────────────
+          GoRoute(
+            path: '/lessons/:subjectId',
+            builder: (_, state) => LessonsScreen(
+              subjectId: state.pathParameters['subjectId']!,
             ),
-          ],
-        ),
-
-        // ── Home (ShellRoute + BottomNav) ────────────────────
-        ShellRoute(
-          builder: (context, state, child) => HomeShell(child: child),
-          routes: [
-            GoRoute(
-              name: RouteNames.mainName,
-              path: RouteNames.main,
-              builder: (context, state) => const MainTab(),
+          ),
+          GoRoute(
+            path: '/lesson/:subjectId/:lessonId',
+            builder: (_, state) => QuizScreenWidget(
+              subjectId: state.pathParameters['subjectId']!,
             ),
-            GoRoute(
-              name: RouteNames.profileName,
-              path: RouteNames.profile,
-              builder: (context, state) => const ProfileTab(),
+          ),
+          GoRoute(
+            path: '/results/:subjectId',
+            builder: (_, state) => ResultsScreen(
+              subjectId: state.pathParameters['subjectId']!,
             ),
-          ],
-        ),
+          ),
 
-        // ── Lessons list ──────────────────────────────────────
-        GoRoute(
-          name: RouteNames.lessonsName,
-          path: RouteNames.lessons,
-          builder: (context, state) {
-            final subjectId =
-                state.pathParameters[RouteNames.subjectIdParam]!;
-            return LessonsScreen(subjectId: subjectId);
-          },
-
-          // ── Lesson detail + Quiz (вложены, чтобы кнопка «Назад»
-          //    работала корректно) ─────────────────────────────
-          routes: [
-            GoRoute(
-              name: RouteNames.lessonDetailName,
-              // Относительный путь: /subjects/:subjectId/lessons/:lessonId
-              path: ':${RouteNames.lessonIdParam}',
-              builder: (context, state) {
-                final subjectId =
-                    state.pathParameters[RouteNames.subjectIdParam]!;
-                final lessonId =
-                    state.pathParameters[RouteNames.lessonIdParam]!;
-                return LessonDetailScreen(
-                  subjectId: subjectId,
-                  lessonId: lessonId,
-                );
-              },
-              routes: [
-                GoRoute(
-                  name: RouteNames.quizName,
-                  // Относительный путь: quiz
-                  path: 'quiz',
-                  builder: (context, state) {
-                    final subjectId =
-                        state.pathParameters[RouteNames.subjectIdParam]!;
-                    final lessonId =
-                        state.pathParameters[RouteNames.lessonIdParam]!;
-                    return QuizScreen(
-                      subjectId: subjectId,
-                      lessonId: lessonId,
-                    );
-                  },
-                ),
-              ],
+          // ── Multiplayer ───────────────────────────────────────────────────
+          GoRoute(
+            path: '/multiplayer/room',
+            builder: (_, __) => const WaitingRoomScreen(),
+          ),
+          GoRoute(
+            path: '/multiplayer/game',
+            builder: (_, __) => const GameScreen(),
+          ),
+          GoRoute(
+            path: '/multiplayer/results',
+            builder: (_, __) => const GameResultsScreen(),
+          ),
+          GoRoute(
+            path: '/chat/:roomId',
+            builder: (_, state) => ChatScreen(
+              roomId: state.pathParameters['roomId']!,
             ),
-          ],
-        ),
-      ],
-
-      // ── Страница ошибки (404) ──────────────────────────────
-      errorBuilder: (context, state) => Scaffold(
-        body: Center(
-          child: Text(
-            'Page not found: ${state.uri}',
-            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+        ],
+        errorBuilder: (_, state) => Scaffold(
+          body: Center(
+            child: Text('Page not found: ${state.uri}'),
           ),
         ),
-      ),
-    );
-  }
+      );
 }
