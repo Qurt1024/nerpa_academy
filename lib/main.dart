@@ -11,14 +11,16 @@ import 'data/repositories/multiplayer_repository.dart';
 import 'features/auth/bloc/auth_bloc.dart';
 import 'features/lessons/bloc/lesson_bloc.dart';
 import 'features/multiplayer/multiplayer.dart';
-
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
   if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(name:'nerpa-academy',options: DefaultFirebaseOptions.currentPlatform);
+    await Firebase.initializeApp(
+      name: 'nerpa-academy',
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   }
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -41,18 +43,23 @@ class _NerpaAcademyAppState extends State<NerpaAcademyApp> {
 
   late final AuthBloc _authBloc;
   late final LessonBloc _lessonBloc;
+  late final _RouterNotifier _routerNotifier;
+  late final router;
 
   @override
   void initState() {
     super.initState();
     _authBloc = AuthBloc(_authRepo)..add(AuthCheckRequested());
     _lessonBloc = LessonBloc(_contentRepo);
+    _routerNotifier = _RouterNotifier(_authBloc);
+    router = AppRouter.router(_authBloc, _routerNotifier);
   }
 
   @override
   void dispose() {
     _authBloc.close();
     _lessonBloc.close();
+    _routerNotifier.dispose();
     super.dispose();
   }
 
@@ -62,7 +69,6 @@ class _NerpaAcademyAppState extends State<NerpaAcademyApp> {
       providers: [
         BlocProvider.value(value: _authBloc),
         BlocProvider.value(value: _lessonBloc),
-        // RoomBloc created lazily with user info after auth
         BlocProvider<RoomBloc>(
           create: (_) {
             final user = _authRepo.currentUser;
@@ -75,26 +81,31 @@ class _NerpaAcademyAppState extends State<NerpaAcademyApp> {
           },
         ),
       ],
-      child: BlocBuilder<AuthBloc, AuthState>(
-        bloc: _authBloc,
-        builder: (context, _) {
-          final router = AppRouter.router(context);
-          return MaterialApp.router(
-            title: 'Nerpa Academy',
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.light,
-            routerConfig: router,
-            builder: (context, child) {
-              return MediaQuery(
-                data: MediaQuery.of(context).copyWith(
-                  textScaler: TextScaler.noScaling,
-                ),
-                child: child!,
-              );
-            },
+      child: MaterialApp.router(
+        title: 'Nerpa Academy',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        routerConfig: router,
+        builder: (context, child) {
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.noScaling,
+            ),
+            child: SafeArea(top: false,child: child!),
           );
         },
       ),
     );
+  }
+}
+
+// Only notifies router on real login/logout — not on user data updates
+class _RouterNotifier extends ChangeNotifier {
+  _RouterNotifier(AuthBloc authBloc) {
+    authBloc.stream.listen((state) {
+      if (state is AuthAuthenticated || state is AuthUnauthenticated) {
+        notifyListeners();
+      }
+    });
   }
 }

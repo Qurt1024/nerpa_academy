@@ -9,10 +9,11 @@ import '../../features/multiplayer/multiplayer.dart';
 import '../../features/chat/chat_profile_screens.dart';
 
 class AppRouter {
-  static GoRouter router(BuildContext context) => GoRouter(
+  static GoRouter router(AuthBloc authBloc, Listenable refreshListenable) => GoRouter(
         initialLocation: '/',
+        refreshListenable: refreshListenable,
         redirect: (ctx, state) {
-          final authState = ctx.read<AuthBloc>().state;
+          final authState = authBloc.state;
           final isAuth = authState is AuthAuthenticated;
           final isAuthRoute =
               state.matchedLocation.startsWith('/login') ||

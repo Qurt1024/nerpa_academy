@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nerpa_academy/core/constants/app_constants.dart';
 import 'package:nerpa_academy/data/models/models.dart';
+import 'package:nerpa_academy/data/repositories/auth_repository.dart';
+import 'package:nerpa_academy/features/auth/bloc/auth_bloc.dart';
 import 'package:nerpa_academy/shared/widgets/shared_widgets.dart';
 import '../bloc/lesson_bloc.dart';
 
@@ -417,9 +419,16 @@ class _AnswerFeedbackBar extends StatelessWidget {
 
 // ─── Results Screen ───────────────────────────────────────────────────────────
 
-class ResultsScreen extends StatelessWidget {
+class ResultsScreen extends StatefulWidget {
   final String subjectId;
   const ResultsScreen({super.key, required this.subjectId});
+
+  @override
+  State<ResultsScreen> createState() => _ResultsScreenState();
+}
+
+class _ResultsScreenState extends State<ResultsScreen> {
+  bool _scoreSaved = false;
 
   @override
   Widget build(BuildContext context) {
@@ -431,6 +440,22 @@ class ResultsScreen extends StatelessWidget {
               child: CircularProgressIndicator(color: AppColors.skyBlue),
             ),
           );
+        }
+
+        // Save score once
+        if (!_scoreSaved) {
+          _scoreSaved = true;
+          final authState = ctx.read<AuthBloc>().state;
+          if (authState is AuthAuthenticated) {
+            final scoreToAdd = state.correctCount * 10;
+            AuthRepository().addCompletedLesson(
+              authState.user.uid,
+              state.lesson.id,
+              scoreToAdd,
+            ).then((_) {
+              ctx.read<AuthBloc>().add(AuthUserRefreshed());
+            });
+          }
         }
 
         final emoji =
@@ -493,8 +518,8 @@ class ResultsScreen extends StatelessWidget {
                     outlined: true,
                     onPressed: () {
                       final lessonId = state.lesson.id;
-                      ctx.read<LessonBloc>().add(LoadQuiz(lessonId: lessonId, subjectId: subjectId));
-                      context.pushReplacement('/lesson/$subjectId/$lessonId');
+                      ctx.read<LessonBloc>().add(LoadQuiz(lessonId: lessonId, subjectId: widget.subjectId));
+                      context.pushReplacement('/lesson/${widget.subjectId}/$lessonId');
                     },
                   ),
                 ],

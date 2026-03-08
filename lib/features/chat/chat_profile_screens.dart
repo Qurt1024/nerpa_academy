@@ -271,6 +271,7 @@ class ProfileScreen extends StatelessWidget {
             child: Column(
               children: [
                 const SizedBox(height: AppDimens.paddingM),
+                const SizedBox(height: AppDimens.paddingS),
                 const NerpaMascot(size: 100),
                 const SizedBox(height: AppDimens.paddingM),
                 Text(
@@ -290,6 +291,12 @@ class ProfileScreen extends StatelessWidget {
                   icon: Icons.star_rounded,
                   label: 'Total Score',
                   value: '${user?.totalScore ?? 0}',
+                ),
+                const SizedBox(height: AppDimens.paddingM),
+                _ProfileTile(
+                  icon: Icons.check_circle_rounded,
+                  label: 'Lessons Completed',
+                  value: '${user?.completedLessons.length ?? 0}',
                 ),
                 const SizedBox(height: AppDimens.paddingM),
                 _ProfileTile(

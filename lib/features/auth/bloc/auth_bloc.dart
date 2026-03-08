@@ -38,6 +38,8 @@ class AuthGoogleSignInRequested extends AuthEvent {}
 
 class AuthSignOutRequested extends AuthEvent {}
 
+class AuthUserRefreshed extends AuthEvent {}
+
 // ─── States ──────────────────────────────────────────────────────────────────
 
 abstract class AuthState extends Equatable {
@@ -76,6 +78,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthSignUpRequested>(_onSignUp);
     on<AuthGoogleSignInRequested>(_onGoogle);
     on<AuthSignOutRequested>(_onSignOut);
+    on<AuthUserRefreshed>(_onRefresh);
+  }
+
+  Future<void> _onRefresh(
+      AuthUserRefreshed event, Emitter<AuthState> emit) async {
+    try {
+      final user = await _repository.fetchCurrentUser();
+      if (user != null) emit(AuthAuthenticated(user));
+    } catch (_) {}
   }
 
   Future<void> _onCheck(

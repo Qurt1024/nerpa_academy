@@ -99,6 +99,21 @@ class AuthRepository {
     });
   }
 
+  Future<void> addCompletedLesson(String uid, String lessonId, int score) async {
+    final doc = await _firestore.collection('users').doc(uid).get();
+    if (!doc.exists) return;
+    final data = doc.data()!;
+    final completed = List<String>.from(data['completedLessons'] ?? []);
+    if (!completed.contains(lessonId)) {
+      completed.add(lessonId);
+    }
+    final currentScore = (data['totalScore'] as num?)?.toInt() ?? 0;
+    await _firestore.collection('users').doc(uid).update({
+      'completedLessons': completed,
+      'totalScore': currentScore + score,
+    });
+  }
+
   Future<void> signOut() async {
     await _googleSignIn.signOut();
     await _auth.signOut();

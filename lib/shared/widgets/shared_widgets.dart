@@ -1,12 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:nerpa_academy/core/constants/app_constants.dart';
 
+// ─── App Icon Widget ─────────────────────────────────────────────────────────
+
+class AppIcon extends StatelessWidget {
+  final double size;
+  const AppIcon({super.key, this.size = 120});
+
+  @override
+  Widget build(BuildContext context) {
+    return SvgPicture.asset(
+      'assets/images/appIcon.svg',
+      width: size,
+      height: size,
+    );
+  }
+}
 
 // ─── Nerpa Mascot Widget ─────────────────────────────────────────────────────
 
 class NerpaMascot extends StatefulWidget {
   final double size;
-  final String expression; // 'happy', 'sad', 'think', 'default'
+  final String expression; // 'happy', 'sad', 'default'
 
   const NerpaMascot({
     super.key,
@@ -41,6 +57,17 @@ class _NerpaMascotState extends State<NerpaMascot>
     super.dispose();
   }
 
+  String get _assetPath {
+    switch (widget.expression) {
+      case 'happy':
+        return 'assets/images/nerpHappy.svg';
+      case 'sad':
+        return 'assets/images/nerpSad.svg';
+      default:
+        return 'assets/images/nerpNeutral.svg';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -49,150 +76,16 @@ class _NerpaMascotState extends State<NerpaMascot>
         offset: Offset(0, -_bounce.value),
         child: child,
       ),
-      child: SizedBox(
+      child: SvgPicture.asset(
+        _assetPath,
         width: widget.size,
         height: widget.size,
-        child: CustomPaint(
-          painter: _NerpaPainter(expression: widget.expression),
-        ),
       ),
     );
   }
 }
 
-class _NerpaPainter extends CustomPainter {
-  final String expression;
-  _NerpaPainter({required this.expression});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    final bodyPaint = Paint()..color = const Color(0xFF607D8B);
-    final bellyPaint = Paint()..color = const Color(0xFFB0BEC5);
-    final eyePaint = Paint()..color = Colors.black;
-    final whitePaint = Paint()..color = Colors.white;
-    final nosePaint = Paint()..color = const Color(0xFF37474F);
-
-    // Body
-    canvas.drawOval(
-      Rect.fromCenter(
-          center: Offset(w * 0.5, h * 0.55),
-          width: w * 0.82,
-          height: h * 0.72),
-      bodyPaint,
-    );
-
-    // Belly
-    canvas.drawOval(
-      Rect.fromCenter(
-          center: Offset(w * 0.5, h * 0.62),
-          width: w * 0.52,
-          height: h * 0.46),
-      bellyPaint,
-    );
-
-    // Head
-    canvas.drawCircle(Offset(w * 0.5, h * 0.3), w * 0.3, bodyPaint);
-
-    // Eyes white
-    canvas.drawCircle(Offset(w * 0.37, h * 0.27), w * 0.085, whitePaint);
-    canvas.drawCircle(Offset(w * 0.63, h * 0.27), w * 0.085, whitePaint);
-
-    // Eyes pupil
-    if (expression == 'sad') {
-      canvas.drawCircle(
-          Offset(w * 0.37, h * 0.29), w * 0.045, eyePaint);
-      canvas.drawCircle(
-          Offset(w * 0.63, h * 0.29), w * 0.045, eyePaint);
-    } else {
-      canvas.drawCircle(
-          Offset(w * 0.37, h * 0.27), w * 0.045, eyePaint);
-      canvas.drawCircle(
-          Offset(w * 0.63, h * 0.27), w * 0.045, eyePaint);
-    }
-
-    // Nose
-    canvas.drawOval(
-      Rect.fromCenter(
-          center: Offset(w * 0.5, h * 0.33),
-          width: w * 0.12,
-          height: w * 0.07),
-      nosePaint,
-    );
-
-    // Whiskers
-    final whiskerPaint = Paint()
-      ..color = Colors.white.withOpacity(0.7)
-      ..strokeWidth = 1.2
-      ..style = PaintingStyle.stroke;
-    // Left whiskers
-    canvas.drawLine(
-        Offset(w * 0.1, h * 0.31), Offset(w * 0.38, h * 0.33), whiskerPaint);
-    canvas.drawLine(
-        Offset(w * 0.1, h * 0.36), Offset(w * 0.38, h * 0.35), whiskerPaint);
-    // Right whiskers
-    canvas.drawLine(
-        Offset(w * 0.9, h * 0.31), Offset(w * 0.62, h * 0.33), whiskerPaint);
-    canvas.drawLine(
-        Offset(w * 0.9, h * 0.36), Offset(w * 0.62, h * 0.35), whiskerPaint);
-
-    // Mouth / expression
-    final mouthPaint = Paint()
-      ..color = Colors.white.withOpacity(0.8)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    if (expression == 'happy') {
-      final path = Path()
-        ..moveTo(w * 0.42, h * 0.37)
-        ..quadraticBezierTo(w * 0.5, h * 0.42, w * 0.58, h * 0.37);
-      canvas.drawPath(path, mouthPaint);
-    } else if (expression == 'sad') {
-      final path = Path()
-        ..moveTo(w * 0.42, h * 0.39)
-        ..quadraticBezierTo(w * 0.5, h * 0.35, w * 0.58, h * 0.39);
-      canvas.drawPath(path, mouthPaint);
-    } else {
-      canvas.drawLine(
-          Offset(w * 0.43, h * 0.38), Offset(w * 0.57, h * 0.38), mouthPaint);
-    }
-
-    // Flippers
-    final flipperPaint = Paint()..color = const Color(0xFF546E7A);
-    // Left
-    canvas.drawOval(
-      Rect.fromCenter(
-          center: Offset(w * 0.1, h * 0.6),
-          width: w * 0.22,
-          height: w * 0.12),
-      flipperPaint,
-    );
-    // Right
-    canvas.drawOval(
-      Rect.fromCenter(
-          center: Offset(w * 0.9, h * 0.6),
-          width: w * 0.22,
-          height: w * 0.12),
-      flipperPaint,
-    );
-
-    // Tail
-    canvas.drawOval(
-      Rect.fromCenter(
-          center: Offset(w * 0.5, h * 0.94),
-          width: w * 0.3,
-          height: w * 0.14),
-      flipperPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_NerpaPainter old) => old.expression != expression;
-}
-
-// ─── Heart Bar ──────────────────────────────────────────────────────────────
+// ─── Fish Bar (replaces HeartBar) ────────────────────────────────────────────
 
 class HeartBar extends StatelessWidget {
   final int hearts;
@@ -209,14 +102,19 @@ class HeartBar extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: List.generate(maxHearts, (i) {
-        final filled = i < hearts;
+        final alive = i < hearts;
         return AnimatedSwitcher(
           duration: AppDimens.animNormal,
-          child: Icon(
-            filled ? Icons.favorite : Icons.favorite_border,
-            key: ValueKey('$i-$filled'),
-            color: filled ? AppColors.heartFull : AppColors.heartEmpty,
-            size: 28,
+          child: Padding(
+            key: ValueKey('$i-$alive'),
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: SvgPicture.asset(
+              alive
+                  ? 'assets/images/fihAlive.svg'
+                  : 'assets/images/fihDead.svg',
+              width: 28,
+              height: 28,
+            ),
           ),
         );
       }),

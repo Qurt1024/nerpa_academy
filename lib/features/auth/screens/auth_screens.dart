@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nerpa_academy/core/constants/app_constants.dart';
 import 'package:nerpa_academy/data/models/models.dart';
@@ -15,19 +16,19 @@ class WelcomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.darkBackground,
+      backgroundColor: AppColors.scaffold,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppDimens.paddingL),
           child: Column(
             children: [
               const Spacer(flex: 2),
-              const NerpaMascot(size: 160, expression: 'happy'),
+              const AppIcon(size: 160),
               const SizedBox(height: AppDimens.paddingXL),
               Text(
                 AppStrings.appName,
                 style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                      color: AppColors.white,
+                      color: AppColors.textPrimary,
                       fontSize: 36,
                     ),
                 textAlign: TextAlign.center,
@@ -119,6 +120,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const Center(child: AppIcon(size: 80)),
+                    const SizedBox(height: AppDimens.paddingL),
                     Text(
                       AppStrings.login,
                       style: Theme.of(context).textTheme.displayMedium,
@@ -233,6 +236,8 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const Center(child: AppIcon(size: 80)),
+              const SizedBox(height: AppDimens.paddingL),
               Text(
                 AppStrings.signUp,
                 style: Theme.of(context).textTheme.displayMedium,
@@ -337,6 +342,7 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
   final Set<String> _selected = {};
   List<SubjectModel> _subjects = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -345,6 +351,7 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
   }
 
   Future<void> _loadSubjects() async {
+    if (mounted) setState(() { _loading = true; _error = null; });
     try {
       final repo = ContentRepository();
       final subjects = await repo.fetchAllSubjects();
@@ -354,8 +361,8 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
           _loading = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (mounted) setState(() { _loading = false; _error = e.toString(); });
     }
   }
 
@@ -426,6 +433,27 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
                       child: Center(
                         child: CircularProgressIndicator(
                             color: AppColors.skyBlue),
+                      ),
+                    )
+                  else if (_error != null)
+                    Expanded(
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.wifi_off_rounded,
+                                size: 48, color: AppColors.textSecondary),
+                            const SizedBox(height: AppDimens.paddingM),
+                            Text('Could not load subjects.\nCheck your connection.',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodyMedium),
+                            const SizedBox(height: AppDimens.paddingM),
+                            NerpaButton(
+                              label: 'Retry',
+                              onPressed: _loadSubjects,
+                            ),
+                          ],
+                        ),
                       ),
                     )
                   else

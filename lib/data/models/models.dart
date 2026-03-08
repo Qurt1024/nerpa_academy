@@ -6,6 +6,7 @@ class UserModel {
   final String? displayName;
   final String? photoUrl;
   final List<String> selectedSubjectIds;
+  final List<String> completedLessons;
   final int totalScore;
   final DateTime createdAt;
 
@@ -15,6 +16,7 @@ class UserModel {
     this.displayName,
     this.photoUrl,
     this.selectedSubjectIds = const [],
+    this.completedLessons = const [],
     this.totalScore = 0,
     required this.createdAt,
   });
@@ -27,6 +29,8 @@ class UserModel {
       photoUrl: map['photoUrl'] as String?,
       selectedSubjectIds:
           List<String>.from(map['selectedSubjectIds'] ?? []),
+      completedLessons:
+          List<String>.from(map['completedLessons'] ?? []),
       totalScore: (map['totalScore'] as num?)?.toInt() ?? 0,
       createdAt: DateTime.fromMillisecondsSinceEpoch(
         (map['createdAt'] as int?) ?? 0,
@@ -40,6 +44,7 @@ class UserModel {
         'displayName': displayName,
         'photoUrl': photoUrl,
         'selectedSubjectIds': selectedSubjectIds,
+        'completedLessons': completedLessons,
         'totalScore': totalScore,
         'createdAt': createdAt.millisecondsSinceEpoch,
       };
@@ -48,6 +53,7 @@ class UserModel {
     String? displayName,
     String? photoUrl,
     List<String>? selectedSubjectIds,
+    List<String>? completedLessons,
     int? totalScore,
   }) =>
       UserModel(
@@ -56,6 +62,7 @@ class UserModel {
         displayName: displayName ?? this.displayName,
         photoUrl: photoUrl ?? this.photoUrl,
         selectedSubjectIds: selectedSubjectIds ?? this.selectedSubjectIds,
+        completedLessons: completedLessons ?? this.completedLessons,
         totalScore: totalScore ?? this.totalScore,
         createdAt: createdAt,
       );
