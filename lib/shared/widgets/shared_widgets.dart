@@ -26,7 +26,7 @@ class NerpaMascot extends StatefulWidget {
 
   const NerpaMascot({
     super.key,
-    this.size = 120,
+    this.size = 160,
     this.expression = 'default',
   });
 
@@ -112,8 +112,8 @@ class HeartBar extends StatelessWidget {
               alive
                   ? 'assets/images/fihAlive.svg'
                   : 'assets/images/fihDead.svg',
-              width: 28,
-              height: 28,
+              width: 48,
+              height: 48,
             ),
           ),
         );
