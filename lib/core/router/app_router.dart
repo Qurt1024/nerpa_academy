@@ -102,7 +102,7 @@ class AppRouter {
             builder: (_, __) => const GameResultsScreen(),
           ),
           GoRoute(
-            path: '/chat/:roomId',
+            path: '/multiplayer/chat/:roomId',
             builder: (_, state) => ChatScreen(
               roomId: state.pathParameters['roomId']!,
             ),

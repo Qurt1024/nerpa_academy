@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nerpa_academy/data/repositories/multiplayer_repository.dart';
 import '../../core/constants/app_constants.dart';
 import '../../data/models/models.dart';
-import '../../data/repositories/multiplayer_repository.dart';
 import '../../shared/widgets/shared_widgets.dart';
 import '../auth/bloc/auth_bloc.dart';
 
@@ -35,25 +35,40 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  void _send(String uid, String name) {
+  void _send(String uid, String name) async {
     final text = _msgCtrl.text.trim();
     if (text.isEmpty) return;
-    _chatRepo.sendMessage(
-      roomId: widget.roomId,
-      senderUid: uid,
-      senderName: name,
-      text: text,
-    );
     _msgCtrl.clear();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollCtrl.hasClients) {
-        _scrollCtrl.animateTo(
-          _scrollCtrl.position.maxScrollExtent,
-          duration: AppDimens.animNormal,
-          curve: Curves.easeOut,
+    try {
+      await _chatRepo.sendMessage(
+        roomId: widget.roomId,
+        senderUid: uid,
+        senderName: name,
+        text: text,
+      );
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (_scrollCtrl.hasClients) {
+          _scrollCtrl.animateTo(
+            _scrollCtrl.position.maxScrollExtent,
+            duration: AppDimens.animNormal,
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.toString().contains('flagged')
+                  ? '⚠️ Message blocked by moderation.'
+                  : 'Failed to send message.',
+            ),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
-    });
+    }
   }
 
   @override
@@ -113,10 +128,7 @@ class _ChatScreenState extends State<ChatScreen> {
               _ChatInput(
                 controller: _msgCtrl,
                 onSend: user != null
-                    ? () => _send(
-                          user.uid,
-                          user.displayName ?? user.email,
-                        )
+                    ? () => _send(user.uid, user.displayName ?? user.email)
                     : null,
               ),
             ],
@@ -271,7 +283,6 @@ class ProfileScreen extends StatelessWidget {
             child: Column(
               children: [
                 const SizedBox(height: AppDimens.paddingM),
-                const SizedBox(height: AppDimens.paddingS),
                 const NerpaMascot(size: 100),
                 const SizedBox(height: AppDimens.paddingM),
                 Text(
@@ -291,12 +302,6 @@ class ProfileScreen extends StatelessWidget {
                   icon: Icons.star_rounded,
                   label: 'Total Score',
                   value: '${user?.totalScore ?? 0}',
-                ),
-                const SizedBox(height: AppDimens.paddingM),
-                _ProfileTile(
-                  icon: Icons.check_circle_rounded,
-                  label: 'Lessons Completed',
-                  value: '${user?.completedLessons.length ?? 0}',
                 ),
                 const SizedBox(height: AppDimens.paddingM),
                 _ProfileTile(

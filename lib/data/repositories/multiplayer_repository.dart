@@ -3,6 +3,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:uuid/uuid.dart';
+import 'package:dio/dio.dart';
 import '../models/models.dart';
 
 // ─── Multiplayer Repository ─────────────────────────────────────────────────
@@ -110,6 +111,46 @@ class MultiplayerRepository {
   Future<void> leaveRoom(String roomId, String uid) async {
     await _roomRef(roomId).child('players/$uid').remove();
   }
+
+  /// Finds an open waiting room for the given subject, or creates a new one.
+  Future<String> findOrCreateMatchRoom({
+    required String subjectId,
+    required String uid,
+    required String displayName,
+  }) async {
+    final snap = await _rtdb
+        .ref('rooms')
+        .orderByChild('subjectId')
+        .equalTo(subjectId)
+        .get();
+    if (snap.exists) {
+      final rooms = Map<String, dynamic>.from(snap.value as Map);
+      for (final entry in rooms.entries) {
+        final data = Map<String, dynamic>.from(entry.value as Map);
+        final status = data['status'] as String? ?? 'waiting';
+        final players = (data['players'] as Map?)?.length ?? 0;
+        if (status == 'waiting' && players < 4) {
+          final roomId = entry.key;
+          final player = RoomPlayer(uid: uid, displayName: displayName);
+          await _roomRef(roomId).child('players/$uid').set(player.toMap());
+          return roomId;
+        }
+      }
+    }
+    // No open room found — create one
+    final roomId = _uuid.v4().substring(0, 6).toUpperCase();
+    final room = RoomModel(
+      id: roomId,
+      hostUid: uid,
+      subjectId: subjectId,
+      lessonId: '',
+      status: RoomStatus.waiting,
+      players: [RoomPlayer(uid: uid, displayName: displayName)],
+      createdAt: DateTime.now(),
+    );
+    await _roomRef(roomId).set(room.toMap());
+    return roomId;
+  }
 }
 
 extension on RoomModel {
@@ -153,22 +194,82 @@ class ChatRepository {
     });
   }
 
+  /// Returns true if the text is flagged by OpenAI moderation.
+  /// Fails open (returns false) if the API is unreachable.
+  Future<bool> _isFlagged(String text) async {
+    final apiKey = dotenv.env['OPENAI_API_KEY'];
+    if (apiKey == null || apiKey.isEmpty) {
+      print('[Moderation] OPENAI_API_KEY not found in .env');
+      return false;
+    }
+    print('[Moderation] Checking text: "$text"');
+
+    try {
+      final dio = Dio();
+      final response = await dio.post(
+        'https://api.openai.com/v1/moderations',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $apiKey',
+          },
+          sendTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 5),
+        ),
+        data: {'input': text},
+      );
+      print('[Moderation] Response: ${response.data}');
+      final result = response.data['results']?[0];
+
+      // Use flagged boolean OR check if any individual category score
+      // exceeds a lower threshold (0.5) for stricter moderation
+      final flagged = result?['flagged'] == true;
+      final scores = result?['category_scores'] as Map<String, dynamic>?;
+      final highScore = scores?.values
+          .any((score) => (score as num) > 0.1) ?? false;
+
+      final shouldBlock = flagged || highScore;
+      print('[Moderation] Flagged: $flagged, HighScore: $highScore');
+      return shouldBlock;
+    } catch (e) {
+      print('[Moderation] Error: $e');
+      return false;
+    }
+  }
+
   Future<void> sendMessage({
     required String roomId,
     required String senderUid,
     required String senderName,
     required String text,
   }) async {
-    final truncated =
-        text.length > 140 ? text.substring(0, 140) : text;
-    final ref = _chatRef(roomId).push();
-    await ref.set(ChatMessage(
-      id: ref.key!,
-      roomId: roomId,
-      senderUid: senderUid,
-      senderName: senderName,
-      text: truncated,
-      sentAt: DateTime.now(),
-    ).toMap());
+    final truncated = text.trim().length > 140
+        ? text.trim().substring(0, 140)
+        : text.trim();
+
+    if (truncated.isEmpty) return;
+
+    print('[Chat] Sending message to room $roomId');
+    final flagged = await _isFlagged(truncated);
+    if (flagged) {
+      print('[Chat] Message blocked by moderation');
+      throw Exception('flagged');
+    }
+
+    print('[Chat] Writing to RTDB path: chats/$roomId');
+    try {
+      final ref = _chatRef(roomId).push();
+      await ref.set(ChatMessage(
+        id: ref.key!,
+        roomId: roomId,
+        senderUid: senderUid,
+        senderName: senderName,
+        text: truncated,
+        sentAt: DateTime.now(),
+      ).toMap());
+      print('[Chat] Message written successfully');
+    } catch (e) {
+      print('[Chat] RTDB write error: $e');
+      rethrow;
+    }
   }
 }
