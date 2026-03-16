@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:nerpa_academy/core/l10n/app_localizations.dart';
+import 'package:nerpa_academy/core/l10n/language_cubit.dart';
 import 'package:nerpa_academy/data/repositories/multiplayer_repository.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -26,11 +28,17 @@ void main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  runApp(const NerpaAcademyApp());
+
+  // Load persisted language before app launches
+  final languageCubit = LanguageCubit();
+  await languageCubit.loadSavedLanguage();
+
+  runApp(NerpaAcademyApp(languageCubit: languageCubit));
 }
 
 class NerpaAcademyApp extends StatefulWidget {
-  const NerpaAcademyApp({super.key});
+  final LanguageCubit languageCubit;
+  const NerpaAcademyApp({super.key, required this.languageCubit});
 
   @override
   State<NerpaAcademyApp> createState() => _NerpaAcademyAppState();
@@ -67,6 +75,8 @@ class _NerpaAcademyAppState extends State<NerpaAcademyApp> {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
+        // Language cubit must be outermost so l10n works everywhere
+        BlocProvider.value(value: widget.languageCubit),
         BlocProvider.value(value: _authBloc),
         BlocProvider.value(value: _lessonBloc),
         BlocProvider<RoomBloc>(
@@ -76,22 +86,27 @@ class _NerpaAcademyAppState extends State<NerpaAcademyApp> {
               mpRepo: _multiplayerRepo,
               contentRepo: _contentRepo,
               currentUid: user?.uid ?? '',
-              displayName: user?.displayName ?? user?.email ?? 'Игрок',
+              displayName: user?.displayName ?? user?.email ?? 'Player',
             );
           },
         ),
       ],
-      child: MaterialApp.router(
-        title: 'Nerpa Academy',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        routerConfig: router,
-        builder: (context, child) {
-          return MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: TextScaler.noScaling,
-            ),
-            child: SafeArea(top: false,child: child!),
+      child: BlocBuilder<LanguageCubit, AppLanguage>(
+        // Rebuild MaterialApp when language changes so the whole tree gets new l10n
+        builder: (ctx, lang) {
+          return MaterialApp.router(
+            title: 'Nerpa Academy',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            routerConfig: router,
+            builder: (context, child) {
+              return MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: TextScaler.noScaling,
+                ),
+                child: SafeArea(top: false, child: child!),
+              );
+            },
           );
         },
       ),
@@ -99,11 +114,13 @@ class _NerpaAcademyAppState extends State<NerpaAcademyApp> {
   }
 }
 
-// Only notifies router on real login/logout — not on user data updates
+// Only notifies router on real login/logout transitions
 class _RouterNotifier extends ChangeNotifier {
   _RouterNotifier(AuthBloc authBloc) {
     authBloc.stream.listen((state) {
-      if (state is AuthAuthenticated || state is AuthUnauthenticated) {
+      if (state is AuthAuthenticated ||
+          state is AuthUnauthenticated ||
+          state is AuthNeedsSubjectSelection) {
         notifyListeners();
       }
     });

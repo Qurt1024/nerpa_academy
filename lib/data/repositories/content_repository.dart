@@ -6,69 +6,45 @@ class ContentRepository {
 
   // ── Subjects ──────────────────────────────────────────────────────────────
 
-  Future<List<SubjectModel>> fetchAllSubjects() async {
-    final snap = await _db
-        .collection('subjects')
-        .orderBy('order')
-        .get();
-    return snap.docs
-        .map((d) => SubjectModel.fromMap(d.id, d.data()))
-        .toList();
+  Future<List<SubjectModel>> fetchAllSubjects({String langCode = 'en'}) async {
+    final snap = await _db.collection('subjects').orderBy('order').get();
+    return snap.docs.map((d) => SubjectModel.fromMap(d.id, d.data(), langCode: langCode)).toList();
   }
 
-  Future<List<SubjectModel>> fetchSubjectsByIds(
-      List<String> ids) async {
+  Future<List<SubjectModel>> fetchSubjectsByIds(List<String> ids, {String langCode = 'en'}) async {
     if (ids.isEmpty) return [];
-    final snap = await _db
-        .collection('subjects')
-        .where(FieldPath.documentId, whereIn: ids)
-        .get();
+    final snap = await _db.collection('subjects').where(FieldPath.documentId, whereIn: ids).get();
     return snap.docs
-        .map((d) => SubjectModel.fromMap(d.id, d.data()))
+        .map((d) => SubjectModel.fromMap(d.id, d.data(), langCode: langCode))
         .toList()
       ..sort((a, b) => a.order.compareTo(b.order));
   }
 
   // ── Lessons ───────────────────────────────────────────────────────────────
 
-  Future<List<LessonModel>> fetchLessonsForSubject(
-      String subjectId) async {
+  Future<List<LessonModel>> fetchLessonsForSubject(String subjectId, {String langCode = 'en'}) async {
     final snap = await _db
-        .collection('subjects')
-        .doc(subjectId)
-        .collection('lessons')
-        .orderBy('order')
-        .get();
-    return snap.docs
-        .map((d) => LessonModel.fromMap(d.id, d.data()))
-        .toList();
+        .collection('subjects').doc(subjectId)
+        .collection('lessons').orderBy('order').get();
+    return snap.docs.map((d) => LessonModel.fromMap(d.id, d.data(), langCode: langCode)).toList();
   }
 
-  Future<LessonModel?> fetchLesson(String lessonId, String subjectId) async {
+  Future<LessonModel?> fetchLesson(String lessonId, String subjectId, {String langCode = 'en'}) async {
     final doc = await _db
-        .collection('subjects')
-        .doc(subjectId)
-        .collection('lessons')
-        .doc(lessonId)
-        .get();
+        .collection('subjects').doc(subjectId)
+        .collection('lessons').doc(lessonId).get();
     if (!doc.exists) return null;
-    return LessonModel.fromMap(doc.id, doc.data()!);
+    return LessonModel.fromMap(doc.id, doc.data()!, langCode: langCode);
   }
 
   // ── Questions ─────────────────────────────────────────────────────────────
 
   Future<List<QuestionModel>> fetchQuestionsForLesson(
-      String lessonId, String subjectId) async {
+      String lessonId, String subjectId, {String langCode = 'en'}) async {
     final snap = await _db
-        .collection('subjects')
-        .doc(subjectId)
-        .collection('lessons')
-        .doc(lessonId)
-        .collection('questions')
-        .orderBy('order')
-        .get();
-    return snap.docs
-        .map((d) => QuestionModel.fromMap(d.id, d.data()))
-        .toList();
+        .collection('subjects').doc(subjectId)
+        .collection('lessons').doc(lessonId)
+        .collection('questions').orderBy('order').get();
+    return snap.docs.map((d) => QuestionModel.fromMap(d.id, d.data(), langCode: langCode)).toList();
   }
 }

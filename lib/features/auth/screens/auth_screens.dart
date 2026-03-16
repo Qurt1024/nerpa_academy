@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nerpa_academy/core/constants/app_constants.dart';
+import 'package:nerpa_academy/core/l10n/app_localizations.dart';
+import 'package:nerpa_academy/core/l10n/language_cubit.dart';
 import 'package:nerpa_academy/data/models/models.dart';
 import 'package:nerpa_academy/data/repositories/content_repository.dart';
 import 'package:nerpa_academy/shared/widgets/shared_widgets.dart';
@@ -15,6 +16,7 @@ class WelcomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Scaffold(
       backgroundColor: AppColors.scaffold,
       body: SafeArea(
@@ -26,7 +28,7 @@ class WelcomeScreen extends StatelessWidget {
               const AppIcon(size: 160),
               const SizedBox(height: AppDimens.paddingXL),
               Text(
-                AppStrings.appName,
+                l10n.appName,
                 style: Theme.of(context).textTheme.displayLarge?.copyWith(
                       color: AppColors.textPrimary,
                       fontSize: 36,
@@ -35,20 +37,17 @@ class WelcomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: AppDimens.paddingS),
               Text(
-                AppStrings.welcomeSubtitle,
+                l10n.welcomeSubtitle,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: AppColors.white.withOpacity(0.75),
                     ),
                 textAlign: TextAlign.center,
               ),
               const Spacer(flex: 3),
-              NerpaButton(
-                label: AppStrings.login,
-                onPressed: () => context.push('/login'),
-              ),
+              NerpaButton(label: l10n.login, onPressed: () => context.push('/login')),
               const SizedBox(height: AppDimens.paddingM),
               NerpaButton(
-                label: AppStrings.signUp,
+                label: l10n.signUp,
                 outlined: true,
                 onPressed: () => context.push('/signup/step1'),
               ),
@@ -93,23 +92,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return BlocListener<AuthBloc, AuthState>(
       listener: (ctx, state) {
         if (state is AuthAuthenticated) {
           context.go('/home');
+        } else if (state is AuthNeedsSubjectSelection) {
+          context.go('/select-subjects');
         } else if (state is AuthError) {
           ScaffoldMessenger.of(ctx).showSnackBar(
-            SnackBar(
-              content: Text(state.message),
-              backgroundColor: AppColors.error,
-            ),
+            SnackBar(content: Text(state.message), backgroundColor: AppColors.error),
           );
         }
       },
       child: Scaffold(
-        appBar: AppBar(
-          leading: BackButton(onPressed: () => context.pop()),
-        ),
+        appBar: AppBar(leading: BackButton(onPressed: () => context.pop())),
         body: BlocBuilder<AuthBloc, AuthState>(
           builder: (ctx, state) {
             final loading = state is AuthLoading;
@@ -122,20 +119,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     const Center(child: AppIcon(size: 80)),
                     const SizedBox(height: AppDimens.paddingL),
-                    Text(
-                      AppStrings.login,
-                      style: Theme.of(context).textTheme.displayMedium,
-                    ),
+                    Text(l10n.login, style: Theme.of(context).textTheme.displayMedium),
                     const SizedBox(height: AppDimens.paddingXL),
                     TextFormField(
                       controller: _emailCtrl,
                       keyboardType: TextInputType.emailAddress,
-                      decoration:
-                          const InputDecoration(hintText: AppStrings.email),
+                      decoration: InputDecoration(hintText: l10n.email),
                       validator: (v) {
-                        if (v == null || v.isEmpty || !v.contains('@')) {
-                          return AppStrings.invalidEmail;
-                        }
+                        if (v == null || v.isEmpty || !v.contains('@')) return l10n.invalidEmail;
                         return null;
                       },
                     ),
@@ -144,30 +135,21 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _passCtrl,
                       obscureText: _obscure,
                       decoration: InputDecoration(
-                        hintText: AppStrings.password,
+                        hintText: l10n.password,
                         suffixIcon: IconButton(
-                          onPressed: () =>
-                              setState(() => _obscure = !_obscure),
-                          icon: Icon(_obscure
-                              ? Icons.visibility_off
-                              : Icons.visibility),
+                          onPressed: () => setState(() => _obscure = !_obscure),
+                          icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
                         ),
                       ),
                       validator: (v) {
-                        if (v == null || v.length < 6) {
-                          return AppStrings.weakPassword;
-                        }
+                        if (v == null || v.length < 6) return l10n.weakPassword;
                         return null;
                       },
                     ),
                     const SizedBox(height: AppDimens.paddingM),
                     _GoogleButton(),
                     const SizedBox(height: AppDimens.paddingXL),
-                    NerpaButton(
-                      label: AppStrings.login,
-                      loading: loading,
-                      onPressed: loading ? null : _submit,
-                    ),
+                    NerpaButton(label: l10n.login, loading: loading, onPressed: loading ? null : _submit),
                     const SizedBox(height: AppDimens.paddingM),
                     Center(
                       child: TextButton(
@@ -175,7 +157,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           context.pop();
                           context.push('/signup/step1');
                         },
-                        child: const Text("Don't have an account? Sign Up"),
+                        child: Text(l10n.dontHaveAccount),
                       ),
                     ),
                   ],
@@ -224,10 +206,11 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.pop()),
-        title: const Text('Step 1 of 2'),
+        title: Text(l10n.step1of2),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppDimens.paddingL),
@@ -238,20 +221,14 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
             children: [
               const Center(child: AppIcon(size: 80)),
               const SizedBox(height: AppDimens.paddingL),
-              Text(
-                AppStrings.signUp,
-                style: Theme.of(context).textTheme.displayMedium,
-              ),
+              Text(l10n.signUp, style: Theme.of(context).textTheme.displayMedium),
               const SizedBox(height: AppDimens.paddingXL),
               TextFormField(
                 controller: _emailCtrl,
                 keyboardType: TextInputType.emailAddress,
-                decoration:
-                    const InputDecoration(hintText: AppStrings.email),
+                decoration: InputDecoration(hintText: l10n.email),
                 validator: (v) {
-                  if (v == null || !v.contains('@')) {
-                    return AppStrings.invalidEmail;
-                  }
+                  if (v == null || !v.contains('@')) return l10n.invalidEmail;
                   return null;
                 },
               ),
@@ -260,19 +237,14 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
                 controller: _passCtrl,
                 obscureText: _obscurePass,
                 decoration: InputDecoration(
-                  hintText: AppStrings.password,
+                  hintText: l10n.password,
                   suffixIcon: IconButton(
-                    onPressed: () =>
-                        setState(() => _obscurePass = !_obscurePass),
-                    icon: Icon(_obscurePass
-                        ? Icons.visibility_off
-                        : Icons.visibility),
+                    onPressed: () => setState(() => _obscurePass = !_obscurePass),
+                    icon: Icon(_obscurePass ? Icons.visibility_off : Icons.visibility),
                   ),
                 ),
                 validator: (v) {
-                  if (v == null || v.length < 6) {
-                    return AppStrings.weakPassword;
-                  }
+                  if (v == null || v.length < 6) return l10n.weakPassword;
                   return null;
                 },
               ),
@@ -281,29 +253,21 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
                 controller: _confirmCtrl,
                 obscureText: _obscureConfirm,
                 decoration: InputDecoration(
-                  hintText: AppStrings.confirmPassword,
+                  hintText: l10n.confirmPassword,
                   suffixIcon: IconButton(
-                    onPressed: () =>
-                        setState(() => _obscureConfirm = !_obscureConfirm),
-                    icon: Icon(_obscureConfirm
-                        ? Icons.visibility_off
-                        : Icons.visibility),
+                    onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                    icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
                   ),
                 ),
                 validator: (v) {
-                  if (v != _passCtrl.text) {
-                    return AppStrings.passwordsMismatch;
-                  }
+                  if (v != _passCtrl.text) return l10n.passwordsMismatch;
                   return null;
                 },
               ),
               const SizedBox(height: AppDimens.paddingM),
               _GoogleButton(),
               const SizedBox(height: AppDimens.paddingXL),
-              NerpaButton(
-                label: AppStrings.next,
-                onPressed: _next,
-              ),
+              NerpaButton(label: l10n.next, onPressed: _next),
               const SizedBox(height: AppDimens.paddingM),
               Center(
                 child: TextButton(
@@ -311,7 +275,7 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
                     context.pop();
                     context.push('/login');
                   },
-                  child: const Text('Already have an account? Log In'),
+                  child: Text(l10n.alreadyHaveAccount),
                 ),
               ),
             ],
@@ -328,11 +292,7 @@ class SignUpStep2Screen extends StatefulWidget {
   final String email;
   final String password;
 
-  const SignUpStep2Screen({
-    super.key,
-    required this.email,
-    required this.password,
-  });
+  const SignUpStep2Screen({super.key, required this.email, required this.password});
 
   @override
   State<SignUpStep2Screen> createState() => _SignUpStep2ScreenState();
@@ -340,6 +300,7 @@ class SignUpStep2Screen extends StatefulWidget {
 
 class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
   final Set<String> _selected = {};
+  String? _selectedLanguageSubjectId;
   List<SubjectModel> _subjects = [];
   bool _loading = true;
   String? _error;
@@ -355,12 +316,7 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
     try {
       final repo = ContentRepository();
       final subjects = await repo.fetchAllSubjects();
-      if (mounted) {
-        setState(() {
-          _subjects = subjects;
-          _loading = false;
-        });
-      }
+      if (mounted) setState(() { _subjects = subjects; _loading = false; });
     } catch (e) {
       if (mounted) setState(() { _loading = false; _error = e.toString(); });
     }
@@ -377,38 +333,43 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
   }
 
   void _submit() {
+    final l10n = context.l10n;
     if (_selected.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.selectSubject)),
+        SnackBar(content: Text(l10n.selectSubject)),
       );
       return;
     }
+    final allSelected = [
+      ..._selected,
+      if (_selectedLanguageSubjectId != null) _selectedLanguageSubjectId!,
+    ];
     context.read<AuthBloc>().add(AuthSignUpRequested(
           email: widget.email,
           password: widget.password,
-          subjectIds: _selected.toList(),
+          subjectIds: allSelected,
         ));
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final appLang = context.read<LanguageCubit>().state;
+    final learnableLanguages = appLang.learnable;
+
     return BlocListener<AuthBloc, AuthState>(
       listener: (ctx, state) {
-        if (state is AuthAuthenticated) {
-          context.go('/home');
-        } else if (state is AuthError) {
+        if (state is AuthAuthenticated) context.go('/home');
+        if (state is AuthError) {
           ScaffoldMessenger.of(ctx).showSnackBar(
-            SnackBar(
-              content: Text(state.message),
-              backgroundColor: AppColors.error,
-            ),
+            SnackBar(content: Text(state.message), backgroundColor: AppColors.error),
           );
         }
       },
       child: Scaffold(
         appBar: AppBar(
           leading: BackButton(onPressed: () => context.pop()),
-          title: const Text('Step 2 of 2'),
+          title: Text(l10n.step2of2),
         ),
         body: BlocBuilder<AuthBloc, AuthState>(
           builder: (ctx, state) {
@@ -418,22 +379,13 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    AppStrings.chooseSubjects,
-                    style: Theme.of(context).textTheme.displayMedium,
-                  ),
+                  Text(l10n.chooseSubjects, style: Theme.of(context).textTheme.displayMedium),
                   const SizedBox(height: AppDimens.paddingS),
-                  Text(
-                    'Selected subjects will be highlighted.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+                  Text(l10n.selectedHighlighted, style: Theme.of(context).textTheme.bodyMedium),
                   const SizedBox(height: AppDimens.paddingXL),
                   if (_loading)
                     const Expanded(
-                      child: Center(
-                        child: CircularProgressIndicator(
-                            color: AppColors.skyBlue),
-                      ),
+                      child: Center(child: CircularProgressIndicator(color: AppColors.skyBlue)),
                     )
                   else if (_error != null)
                     Expanded(
@@ -441,42 +393,233 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.wifi_off_rounded,
-                                size: 48, color: AppColors.textSecondary),
+                            const Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.textSecondary),
                             const SizedBox(height: AppDimens.paddingM),
-                            Text('Could not load subjects.\nCheck your connection.',
-                                textAlign: TextAlign.center,
+                            Text(l10n.couldNotLoadSubjects, textAlign: TextAlign.center,
                                 style: Theme.of(context).textTheme.bodyMedium),
                             const SizedBox(height: AppDimens.paddingM),
-                            NerpaButton(
-                              label: 'Retry',
-                              onPressed: _loadSubjects,
-                            ),
+                            NerpaButton(label: l10n.retry, onPressed: _loadSubjects),
                           ],
                         ),
                       ),
                     )
                   else
                     Expanded(
-                      child: ListView.separated(
-                        itemCount: _subjects.length,
-                        separatorBuilder: (_, __) =>
+                      child: ListView(
+                        children: [
+                          // Regular subjects
+                          ..._subjects
+                              .where((s) => !s.id.startsWith('language_'))
+                              .map((s) => Padding(
+                                    padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
+                                    child: SubjectCard(
+                                      emoji: s.emoji,
+                                      title: s.title,
+                                      lessonCount: s.lessonCount,
+                                      selected: _selected.contains(s.id),
+                                      onTap: () => _toggle(s.id),
+                                    ),
+                                  )),
+                          // Language subject section
+                          if (learnableLanguages.isNotEmpty) ...[
                             const SizedBox(height: AppDimens.paddingM),
-                        itemBuilder: (_, i) {
-                          final s = _subjects[i];
-                          return SubjectCard(
-                            emoji: s.emoji,
-                            title: s.title,
-                            lessonCount: s.lessonCount,
-                            selected: _selected.contains(s.id),
-                            onTap: () => _toggle(s.id),
-                          );
-                        },
+                            Text(l10n.chooseLanguageSubject,
+                                style: Theme.of(context).textTheme.headlineSmall),
+                            const SizedBox(height: AppDimens.paddingM),
+                            ...learnableLanguages.map((lang) => Padding(
+                                  padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
+                                  child: SubjectCard(
+                                    emoji: _langEmoji(lang),
+                                    title: l10n.languageSubjectName(lang),
+                                    lessonCount: 0,
+                                    selected: _selectedLanguageSubjectId == lang.subjectId,
+                                    onTap: () => setState(() {
+                                      _selectedLanguageSubjectId =
+                                          _selectedLanguageSubjectId == lang.subjectId
+                                              ? null
+                                              : lang.subjectId;
+                                    }),
+                                  ),
+                                )),
+                          ],
+                          const SizedBox(height: AppDimens.paddingM),
+                        ],
                       ),
                     ),
                   const SizedBox(height: AppDimens.paddingM),
                   NerpaButton(
-                    label: AppStrings.continueText,
+                    label: l10n.continueText,
+                    loading: processing,
+                    onPressed: processing ? null : _submit,
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Subject Selection Screen (for Google new users / missing subjects) ───────
+// This screen is shown instead of the regular Sign Up Step 2 when a user
+// authenticates via Google and has no subjects selected yet.
+
+class SubjectSelectionScreen extends StatefulWidget {
+  const SubjectSelectionScreen({super.key});
+
+  @override
+  State<SubjectSelectionScreen> createState() => _SubjectSelectionScreenState();
+}
+
+class _SubjectSelectionScreenState extends State<SubjectSelectionScreen> {
+  final Set<String> _selected = {};
+  String? _selectedLanguageSubjectId;
+  List<SubjectModel> _subjects = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSubjects();
+  }
+
+  Future<void> _loadSubjects() async {
+    if (mounted) setState(() { _loading = true; _error = null; });
+    try {
+      final repo = ContentRepository();
+      final subjects = await repo.fetchAllSubjects();
+      if (mounted) setState(() { _subjects = subjects; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _loading = false; _error = e.toString(); });
+    }
+  }
+
+  void _submit() {
+    final l10n = context.l10n;
+    if (_selected.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.selectSubject)),
+      );
+      return;
+    }
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthNeedsSubjectSelection) return;
+
+    final appLang = context.read<LanguageCubit>().state;
+    final allSelected = [
+      ..._selected,
+      if (_selectedLanguageSubjectId != null) _selectedLanguageSubjectId!,
+    ];
+
+    context.read<AuthBloc>().add(AuthGoogleSubjectsSelected(
+          user: authState.user,
+          subjectIds: allSelected,
+          appLanguage: appLang.code,
+        ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final appLang = context.read<LanguageCubit>().state;
+    final learnableLanguages = appLang.learnable;
+
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (ctx, state) {
+        if (state is AuthAuthenticated) context.go('/home');
+        if (state is AuthError) {
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            SnackBar(content: Text(state.message), backgroundColor: AppColors.error),
+          );
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(title: Text(l10n.chooseSubjects)),
+        body: BlocBuilder<AuthBloc, AuthState>(
+          builder: (ctx, state) {
+            final processing = state is AuthLoading;
+            return Padding(
+              padding: const EdgeInsets.all(AppDimens.paddingL),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l10n.chooseSubjects, style: Theme.of(context).textTheme.displayMedium),
+                  const SizedBox(height: AppDimens.paddingS),
+                  Text(l10n.selectedHighlighted, style: Theme.of(context).textTheme.bodyMedium),
+                  const SizedBox(height: AppDimens.paddingXL),
+                  if (_loading)
+                    const Expanded(
+                      child: Center(child: CircularProgressIndicator(color: AppColors.skyBlue)),
+                    )
+                  else if (_error != null)
+                    Expanded(
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.textSecondary),
+                            const SizedBox(height: AppDimens.paddingM),
+                            Text(l10n.couldNotLoadSubjects, textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodyMedium),
+                            const SizedBox(height: AppDimens.paddingM),
+                            NerpaButton(label: l10n.retry, onPressed: _loadSubjects),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView(
+                        children: [
+                          ..._subjects
+                              .where((s) => !s.id.startsWith('language_'))
+                              .map((s) => Padding(
+                                    padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
+                                    child: SubjectCard(
+                                      emoji: s.emoji,
+                                      title: s.title,
+                                      lessonCount: s.lessonCount,
+                                      selected: _selected.contains(s.id),
+                                      onTap: () => setState(() {
+                                        if (_selected.contains(s.id)) {
+                                          _selected.remove(s.id);
+                                        } else {
+                                          _selected.add(s.id);
+                                        }
+                                      }),
+                                    ),
+                                  )),
+                          if (learnableLanguages.isNotEmpty) ...[
+                            const SizedBox(height: AppDimens.paddingM),
+                            Text(l10n.chooseLanguageSubject,
+                                style: Theme.of(context).textTheme.headlineSmall),
+                            const SizedBox(height: AppDimens.paddingM),
+                            ...learnableLanguages.map((lang) => Padding(
+                                  padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
+                                  child: SubjectCard(
+                                    emoji: _langEmoji(lang),
+                                    title: l10n.languageSubjectName(lang),
+                                    lessonCount: 0,
+                                    selected: _selectedLanguageSubjectId == lang.subjectId,
+                                    onTap: () => setState(() {
+                                      _selectedLanguageSubjectId =
+                                          _selectedLanguageSubjectId == lang.subjectId
+                                              ? null
+                                              : lang.subjectId;
+                                    }),
+                                  ),
+                                )),
+                          ],
+                          const SizedBox(height: AppDimens.paddingM),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: AppDimens.paddingM),
+                  NerpaButton(
+                    label: l10n.continueText,
                     loading: processing,
                     onPressed: processing ? null : _submit,
                   ),
@@ -495,9 +638,9 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
 class _GoogleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return OutlinedButton(
-      onPressed: () =>
-          context.read<AuthBloc>().add(AuthGoogleSignInRequested()),
+      onPressed: () => context.read<AuthBloc>().add(AuthGoogleSignInRequested()),
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(double.infinity, AppDimens.buttonHeight),
         shape: RoundedRectangleBorder(
@@ -516,27 +659,25 @@ class _GoogleButton extends StatelessWidget {
               color: AppColors.skyBlue.withOpacity(0.2),
             ),
             child: const Center(
-              child: Text(
-                'G',
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 13,
-                  color: AppColors.skyBlue,
-                ),
-              ),
+              child: Text('G', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.skyBlue)),
             ),
           ),
           const SizedBox(width: 8),
-          const Text(
-            AppStrings.signInWithGoogle,
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontFamily: 'Nunito',
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(l10n.signInWithGoogle,
+              style: const TextStyle(
+                  color: AppColors.textPrimary, fontFamily: 'Nunito', fontWeight: FontWeight.w600)),
         ],
       ),
     );
+  }
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+String _langEmoji(AppLanguage lang) {
+  switch (lang) {
+    case AppLanguage.english: return '🇬🇧';
+    case AppLanguage.russian: return '🇷🇺';
+    case AppLanguage.kazakh:  return '🇰🇿';
   }
 }

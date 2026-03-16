@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:nerpa_academy/data/models/models.dart';
 import 'package:nerpa_academy/data/repositories/auth_repository.dart';
 
-
 // ─── Events ──────────────────────────────────────────────────────────────────
 
 abstract class AuthEvent extends Equatable {
@@ -36,6 +35,20 @@ class AuthSignUpRequested extends AuthEvent {
 
 class AuthGoogleSignInRequested extends AuthEvent {}
 
+/// Fired after a Google new-user completes subject selection
+class AuthGoogleSubjectsSelected extends AuthEvent {
+  final UserModel user;
+  final List<String> subjectIds;
+  final String appLanguage;
+  AuthGoogleSubjectsSelected({
+    required this.user,
+    required this.subjectIds,
+    required this.appLanguage,
+  });
+  @override
+  List<Object?> get props => [user, subjectIds, appLanguage];
+}
+
 class AuthSignOutRequested extends AuthEvent {}
 
 class AuthUserRefreshed extends AuthEvent {}
@@ -60,6 +73,14 @@ class AuthAuthenticated extends AuthState {
 
 class AuthUnauthenticated extends AuthState {}
 
+/// New Google user needs to pick subjects before entering the app
+class AuthNeedsSubjectSelection extends AuthState {
+  final UserModel user;
+  AuthNeedsSubjectSelection(this.user);
+  @override
+  List<Object?> get props => [user];
+}
+
 class AuthError extends AuthState {
   final String message;
   AuthError(this.message);
@@ -77,25 +98,29 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthLoginRequested>(_onLogin);
     on<AuthSignUpRequested>(_onSignUp);
     on<AuthGoogleSignInRequested>(_onGoogle);
+    on<AuthGoogleSubjectsSelected>(_onGoogleSubjectsSelected);
     on<AuthSignOutRequested>(_onSignOut);
     on<AuthUserRefreshed>(_onRefresh);
   }
 
-  Future<void> _onRefresh(
-      AuthUserRefreshed event, Emitter<AuthState> emit) async {
+  Future<void> _onRefresh(AuthUserRefreshed event, Emitter<AuthState> emit) async {
     try {
       final user = await _repository.fetchCurrentUser();
       if (user != null) emit(AuthAuthenticated(user));
     } catch (_) {}
   }
 
-  Future<void> _onCheck(
-      AuthCheckRequested event, Emitter<AuthState> emit) async {
+  Future<void> _onCheck(AuthCheckRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     try {
       final user = await _repository.fetchCurrentUser();
       if (user != null) {
-        emit(AuthAuthenticated(user));
+        // Even persisted users who somehow have empty subjects go through selection
+        if (user.selectedSubjectIds.isEmpty) {
+          emit(AuthNeedsSubjectSelection(user));
+        } else {
+          emit(AuthAuthenticated(user));
+        }
       } else {
         emit(AuthUnauthenticated());
       }
@@ -104,22 +129,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  Future<void> _onLogin(
-      AuthLoginRequested event, Emitter<AuthState> emit) async {
+  Future<void> _onLogin(AuthLoginRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     try {
       final user = await _repository.signInWithEmail(
         email: event.email,
         password: event.password,
       );
-      emit(AuthAuthenticated(user));
+      if (user.selectedSubjectIds.isEmpty) {
+        emit(AuthNeedsSubjectSelection(user));
+      } else {
+        emit(AuthAuthenticated(user));
+      }
     } on Exception catch (e) {
-      emit(AuthError(_mapFirebaseError(e.toString())));
+      emit(AuthError(e.toString()));
     }
   }
 
-  Future<void> _onSignUp(
-      AuthSignUpRequested event, Emitter<AuthState> emit) async {
+  Future<void> _onSignUp(AuthSignUpRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     try {
       final user = await _repository.signUpWithEmail(
@@ -129,38 +156,42 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
       emit(AuthAuthenticated(user));
     } on Exception catch (e) {
-      emit(AuthError(_mapFirebaseError(e.toString())));
+      emit(AuthError(e.toString()));
     }
   }
 
-  Future<void> _onGoogle(
-      AuthGoogleSignInRequested event, Emitter<AuthState> emit) async {
+  Future<void> _onGoogle(AuthGoogleSignInRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     try {
-      final user = await _repository.signInWithGoogle();
-      emit(AuthAuthenticated(user));
+      final result = await _repository.signInWithGoogle();
+      if (result.isNewUser || result.user.selectedSubjectIds.isEmpty) {
+        // New Google user → needs subject selection
+        emit(AuthNeedsSubjectSelection(result.user));
+      } else {
+        emit(AuthAuthenticated(result.user));
+      }
     } on Exception catch (e) {
-      emit(AuthError(_mapFirebaseError(e.toString())));
+      emit(AuthError(e.toString()));
     }
   }
 
-  Future<void> _onSignOut(
-      AuthSignOutRequested event, Emitter<AuthState> emit) async {
+  Future<void> _onGoogleSubjectsSelected(
+      AuthGoogleSubjectsSelected event, Emitter<AuthState> emit) async {
+    emit(AuthLoading());
+    try {
+      final updatedUser = await _repository.saveSubjectsAndLanguage(
+        uid: event.user.uid,
+        subjectIds: event.subjectIds,
+        appLanguage: event.appLanguage,
+      );
+      emit(AuthAuthenticated(updatedUser));
+    } on Exception catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  Future<void> _onSignOut(AuthSignOutRequested event, Emitter<AuthState> emit) async {
     await _repository.signOut();
     emit(AuthUnauthenticated());
-  }
-
-  String _mapFirebaseError(String error) {
-    if (error.contains('user-not-found') ||
-        error.contains('wrong-password')) {
-      return 'Неверный email или пароль';
-    }
-    if (error.contains('email-already-in-use')) {
-      return 'Этот email уже используется';
-    }
-    if (error.contains('network-request-failed')) {
-      return 'Нет подключения к интернету';
-    }
-    return 'Что-то пошло не так';
   }
 }

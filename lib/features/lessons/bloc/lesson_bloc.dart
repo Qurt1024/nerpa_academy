@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:nerpa_academy/data/models/models.dart';
 import 'package:nerpa_academy/data/repositories/content_repository.dart';
 
-
 // ─── Events ──────────────────────────────────────────────────────────────────
 
 abstract class LessonEvent extends Equatable {
@@ -13,26 +12,34 @@ abstract class LessonEvent extends Equatable {
 
 class LoadSubjects extends LessonEvent {
   final List<String> subjectIds;
-  LoadSubjects(this.subjectIds);
+  final String langCode;
+  LoadSubjects(this.subjectIds, {this.langCode = 'en'});
   @override
-  List<Object?> get props => [subjectIds];
+  List<Object?> get props => [subjectIds, langCode];
 }
 
-class LoadAllSubjects extends LessonEvent {}
+class LoadAllSubjects extends LessonEvent {
+  final String langCode;
+  LoadAllSubjects({this.langCode = 'en'});
+  @override
+  List<Object?> get props => [langCode];
+}
 
 class LoadLessons extends LessonEvent {
   final String subjectId;
-  LoadLessons(this.subjectId);
+  final String langCode;
+  LoadLessons(this.subjectId, {this.langCode = 'en'});
   @override
-  List<Object?> get props => [subjectId];
+  List<Object?> get props => [subjectId, langCode];
 }
 
 class LoadQuiz extends LessonEvent {
   final String lessonId;
   final String subjectId;
-  LoadQuiz({required this.lessonId, required this.subjectId});
+  final String langCode;
+  LoadQuiz({required this.lessonId, required this.subjectId, this.langCode = 'en'});
   @override
-  List<Object?> get props => [lessonId, subjectId];
+  List<Object?> get props => [lessonId, subjectId, langCode];
 }
 
 class AnswerQuestion extends LessonEvent {
@@ -173,7 +180,7 @@ class LessonBloc extends Bloc<LessonEvent, LessonState> {
     emit(LessonLoading());
     try {
       final subjects =
-          await _repo.fetchSubjectsByIds(event.subjectIds);
+          await _repo.fetchSubjectsByIds(event.subjectIds, langCode: event.langCode);
       emit(SubjectsLoaded(subjects));
     } catch (e) {
       emit(LessonError(e.toString()));
@@ -184,7 +191,7 @@ class LessonBloc extends Bloc<LessonEvent, LessonState> {
       LoadAllSubjects event, Emitter<LessonState> emit) async {
     emit(LessonLoading());
     try {
-      final subjects = await _repo.fetchAllSubjects();
+      final subjects = await _repo.fetchAllSubjects(langCode: event.langCode);
       emit(SubjectsLoaded(subjects));
     } catch (e) {
       emit(LessonError(e.toString()));
@@ -196,11 +203,10 @@ class LessonBloc extends Bloc<LessonEvent, LessonState> {
     emit(LessonLoading());
     try {
       final subjects =
-          await _repo.fetchSubjectsByIds([event.subjectId]);
+          await _repo.fetchSubjectsByIds([event.subjectId], langCode: event.langCode);
       final lessons =
-          await _repo.fetchLessonsForSubject(event.subjectId);
-      emit(LessonsLoaded(
-          subject: subjects.first, lessons: lessons));
+          await _repo.fetchLessonsForSubject(event.subjectId, langCode: event.langCode);
+      emit(LessonsLoaded(subject: subjects.first, lessons: lessons));
     } catch (e) {
       emit(LessonError(e.toString()));
     }
@@ -210,13 +216,14 @@ class LessonBloc extends Bloc<LessonEvent, LessonState> {
       LoadQuiz event, Emitter<LessonState> emit) async {
     emit(LessonLoading());
     try {
-      final lesson = await _repo.fetchLesson(event.lessonId, event.subjectId);
+      final lesson =
+          await _repo.fetchLesson(event.lessonId, event.subjectId, langCode: event.langCode);
       if (lesson == null) {
-        emit(LessonError('Урок не найден'));
+        emit(LessonError('Lesson not found'));
         return;
       }
-      final questions =
-          await _repo.fetchQuestionsForLesson(event.lessonId, event.subjectId);
+      final questions = await _repo.fetchQuestionsForLesson(
+          event.lessonId, event.subjectId, langCode: event.langCode);
 
       if (lesson.hasTheory) {
         emit(TheoryScreen(lesson: lesson, questions: questions));
@@ -235,14 +242,14 @@ class LessonBloc extends Bloc<LessonEvent, LessonState> {
     }
   }
 
-  void _onAnswer(
-      AnswerQuestion event, Emitter<LessonState> emit) {
+  void _onAnswer(AnswerQuestion event, Emitter<LessonState> emit) {
     final s = state;
     if (s is! QuizInProgress) return;
     if (s.answerStatus != AnswerStatus.idle) return;
 
     final isCorrect = s.currentQuestion.checkAnswer(event.answer);
-    final newHearts = isCorrect ? s.hearts : (s.hearts - 1).clamp(0, maxHearts);
+    final newHearts =
+        isCorrect ? s.hearts : (s.hearts - 1).clamp(0, maxHearts);
     final newCorrect = isCorrect ? s.correctCount + 1 : s.correctCount;
 
     emit(QuizInProgress(
