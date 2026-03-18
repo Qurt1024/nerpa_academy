@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:nerpa_academy/core/l10n/app_localizations.dart';
 import 'package:nerpa_academy/core/l10n/language_cubit.dart';
 import 'package:nerpa_academy/data/repositories/auth_repository.dart';
+import 'package:nerpa_academy/data/repositories/content_repository.dart';
 import 'package:nerpa_academy/data/repositories/multiplayer_repository.dart';
 import '../../core/constants/app_constants.dart';
 import '../../data/models/models.dart';
@@ -309,7 +310,17 @@ class ProfileScreen extends StatelessWidget {
 
                 // ── Language picker ──────────────────────────────────────────
                 _LanguagePicker(),
-                const SizedBox(height: AppDimens.paddingXL),
+                const SizedBox(height: AppDimens.paddingM),
+
+                // ── Edit subjects ────────────────────────────────────────────
+                if (user != null)
+                  NerpaButton(
+                    label: l10n.editSubjects,
+                    icon: Icons.menu_book_rounded,
+                    outlined: true,
+                    onPressed: () => _showEditSubjectsSheet(context, user),
+                  ),
+                const SizedBox(height: AppDimens.paddingM),
 
                 // ── Sign out ─────────────────────────────────────────────────
                 NerpaButton(
@@ -327,6 +338,200 @@ class ProfileScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+void _showEditSubjectsSheet(BuildContext context, UserModel user) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => BlocProvider.value(
+      value: context.read<AuthBloc>(),
+      child: _EditSubjectsSheet(user: user),
+    ),
+  );
+}
+
+// ─── Edit Subjects Bottom Sheet ───────────────────────────────────────────────
+
+class _EditSubjectsSheet extends StatefulWidget {
+  final UserModel user;
+  const _EditSubjectsSheet({required this.user});
+
+  @override
+  State<_EditSubjectsSheet> createState() => _EditSubjectsSheetState();
+}
+
+class _EditSubjectsSheetState extends State<_EditSubjectsSheet> {
+  final _repo = ContentRepository();
+  List<SubjectModel> _subjects = [];
+  late Set<String> _selected;
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = Set.from(widget.user.selectedSubjectIds);
+    _loadSubjects();
+  }
+
+  Future<void> _loadSubjects() async {
+    try {
+      final all = await _repo.fetchAllSubjects();
+      if (mounted) setState(() { _subjects = all; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _loading = false; _error = e.toString(); });
+    }
+  }
+
+  void _toggle(String id) => setState(() {
+    if (_selected.contains(id)) {
+      _selected.remove(id);
+    } else {
+      _selected.add(id);
+    }
+  });
+
+  Future<void> _save() async {
+    final l10n = context.l10n;
+    if (_selected.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.selectSubject)),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    context.read<AuthBloc>().add(AuthSubjectsUpdateRequested(
+      uid: widget.user.uid,
+      subjectIds: _selected.toList(),
+    ));
+    // Wait for the bloc to finish then close the sheet
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final langCode = context.read<LanguageCubit>().state.code;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      maxChildSize: 0.95,
+      minChildSize: 0.5,
+      builder: (_, scrollCtrl) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.scaffold,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimens.radiusXL)),
+        ),
+        child: Column(
+          children: [
+            // ── Drag handle ───────────────────────────────────────────────
+            const SizedBox(height: AppDimens.paddingS),
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.cardBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppDimens.paddingL, AppDimens.paddingM,
+                  AppDimens.paddingL, AppDimens.paddingS),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(l10n.editSubjects,
+                        style: Theme.of(context).textTheme.headlineMedium),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // ── Subject list ──────────────────────────────────────────────
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.skyBlue))
+                  : _error != null
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.textSecondary),
+                              const SizedBox(height: AppDimens.paddingM),
+                              Text(l10n.couldNotLoadSubjects,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.bodyMedium),
+                              const SizedBox(height: AppDimens.paddingM),
+                              NerpaButton(label: l10n.retry, onPressed: _loadSubjects),
+                            ],
+                          ),
+                        )
+                      : ListView(
+                          controller: scrollCtrl,
+                          padding: const EdgeInsets.all(AppDimens.paddingL),
+                          children: [
+                            // Regular subjects
+                            ..._subjects
+                                .where((s) => !s.id.startsWith('language_'))
+                                .map((s) => Padding(
+                                      padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
+                                      child: SubjectCard(
+                                        emoji: s.emoji,
+                                        title: s.localTitle(langCode),
+                                        lessonCount: s.lessonCount,
+                                        selected: _selected.contains(s.id),
+                                        onTap: () => _toggle(s.id),
+                                      ),
+                                    )),
+                            // Language subjects section
+                            const SizedBox(height: AppDimens.paddingS),
+                            Text(l10n.chooseLanguageSubject,
+                                style: Theme.of(context).textTheme.headlineSmall),
+                            const SizedBox(height: AppDimens.paddingM),
+                            ..._subjects
+                                .where((s) => s.id.startsWith('language_'))
+                                .map((s) => Padding(
+                                      padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
+                                      child: SubjectCard(
+                                        emoji: s.emoji,
+                                        title: s.localTitle(langCode),
+                                        lessonCount: s.lessonCount,
+                                        selected: _selected.contains(s.id),
+                                        onTap: () => _toggle(s.id),
+                                      ),
+                                    )),
+                            const SizedBox(height: AppDimens.paddingXL),
+                          ],
+                        ),
+            ),
+            // ── Save button ───────────────────────────────────────────────
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppDimens.paddingL,
+                AppDimens.paddingM,
+                AppDimens.paddingL,
+                AppDimens.paddingL +
+                    MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: NerpaButton(
+                label: l10n.continueText,
+                loading: _saving,
+                onPressed: _saving ? null : _save,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

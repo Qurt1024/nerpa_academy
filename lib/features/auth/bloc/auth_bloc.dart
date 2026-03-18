@@ -49,6 +49,15 @@ class AuthGoogleSubjectsSelected extends AuthEvent {
   List<Object?> get props => [user, subjectIds, appLanguage];
 }
 
+// Fired from the profile screen when the user edits their subject selection.
+class AuthSubjectsUpdateRequested extends AuthEvent {
+  final String uid;
+  final List<String> subjectIds;
+  AuthSubjectsUpdateRequested({required this.uid, required this.subjectIds});
+  @override
+  List<Object?> get props => [uid, subjectIds];
+}
+
 class AuthSignOutRequested extends AuthEvent {}
 
 class AuthUserRefreshed extends AuthEvent {}
@@ -99,6 +108,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthSignUpRequested>(_onSignUp);
     on<AuthGoogleSignInRequested>(_onGoogle);
     on<AuthGoogleSubjectsSelected>(_onGoogleSubjectsSelected);
+    on<AuthSubjectsUpdateRequested>(_onSubjectsUpdate);
     on<AuthSignOutRequested>(_onSignOut);
     on<AuthUserRefreshed>(_onRefresh);
   }
@@ -171,6 +181,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(AuthAuthenticated(result.user));
       }
     } on Exception catch (e) {
+      emit(AuthError(e.toString()));
+    }
+  }
+
+  Future<void> _onSubjectsUpdate(
+      AuthSubjectsUpdateRequested event, Emitter<AuthState> emit) async {
+    final current = state;
+    if (current is! AuthAuthenticated) return;
+    emit(AuthLoading());
+    try {
+      await _repository.updateSelectedSubjects(event.uid, event.subjectIds);
+      // Rebuild user with updated subject list — no extra round-trip needed.
+      final updatedUser = current.user.copyWith(
+        selectedSubjectIds: event.subjectIds,
+      );
+      emit(AuthAuthenticated(updatedUser));
+    } on Exception catch (e) {
+      emit(AuthAuthenticated(current.user)); // revert on error
       emit(AuthError(e.toString()));
     }
   }
