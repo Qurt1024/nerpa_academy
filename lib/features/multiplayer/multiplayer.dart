@@ -380,7 +380,7 @@ class _MultiplayerHubScreenState extends State<MultiplayerHubScreen> {
         }
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Multiplayer')),
+        appBar: AppBar(title: Text(context.l10n.tr(en: 'Multiplayer', ru: 'Мультиплеер', kz: 'Ойын'))),
         body: BlocBuilder<RoomBloc, RoomState>(
           builder: (ctx, state) {
             final loading = state is RoomLoading;
@@ -391,7 +391,7 @@ class _MultiplayerHubScreenState extends State<MultiplayerHubScreen> {
                 children: [
                   const Center(child: NerpaMascot(size: 100, expression: 'happy')),
                   const SizedBox(height: AppDimens.paddingL),
-                  Text('Play with friends!', style: Theme.of(context).textTheme.displayMedium),
+                  Text(context.l10n.tr(en: 'Play with friends!', ru: 'Играй с друзьями!', kz: 'Достарыңмен ойна!'), style: Theme.of(context).textTheme.displayMedium),
                   const SizedBox(height: AppDimens.paddingXL),
                   NerpaButton(
                     label: context.l10n.createRoom,
@@ -401,7 +401,7 @@ class _MultiplayerHubScreenState extends State<MultiplayerHubScreen> {
                   ),
                   const SizedBox(height: AppDimens.paddingM),
                   NerpaButton(
-                    label: 'Quick Match',
+                    label: context.l10n.tr(en: 'Quick Match', ru: 'Быстрый матч', kz: 'Жылдам ойын'),
                     icon: Icons.bolt_rounded,
                     outlined: true,
                     loading: loading,
@@ -632,7 +632,7 @@ class _QuickMatchDialogState extends State<_QuickMatchDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimens.radiusXL)),
-      title: const Text('Quick Match', style: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w800)),
+      title: Text(context.l10n.tr(en: 'Quick Match', ru: 'Быстрый матч', kz: 'Жылдам ойын'), style: const TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w800)),
       content: SizedBox(
         width: double.maxFinite,
         child: _loading
@@ -676,7 +676,8 @@ class WaitingRoomScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<RoomBloc, RoomState>(
+    return BlocBuilder<LanguageCubit, AppLanguage>(
+      builder: (_, __) => BlocConsumer<RoomBloc, RoomState>(
       listener: (ctx, state) {
         if (state is RoomPlaying) context.pushReplacement('/multiplayer/game');
         else if (state is RoomInitial) context.pop();
@@ -696,12 +697,12 @@ class WaitingRoomScreen extends StatelessWidget {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Waiting Room'),
+            title: Text(context.l10n.tr(en: 'Waiting Room', ru: 'Зал ожидания', kz: 'Күту бөлмесі')),
             leading: BackButton(onPressed: () => ctx.read<RoomBloc>().add(LeaveRoomRequested())),
             actions: [
               IconButton(
                 icon: const Icon(Icons.chat_bubble_outline_rounded),
-                tooltip: 'Room Chat',
+                tooltip: context.l10n.tr(en: 'Room Chat', ru: 'Чат комнаты', kz: 'Бөлме чаты'),
                 onPressed: () => context.push('/multiplayer/chat/$roomId'),
               ),
               Center(
@@ -734,10 +735,10 @@ class WaitingRoomScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${AppStrings.players} (${room.players.length}/4)',
+                Text('${context.l10n.players} (${room.players.length}/4)',
                     style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: AppDimens.paddingS),
-                Text('Share the room code with friends!',
+                Text(context.l10n.tr(en: 'Share the room code with friends!', ru: 'Поделитесь кодом комнаты с друзьями!', kz: 'Бөлме кодын достарыңызбен бөлісіңіз!'),
                     style: Theme.of(context).textTheme.bodyMedium),
                 const SizedBox(height: AppDimens.paddingM),
                 Expanded(
@@ -768,8 +769,8 @@ class WaitingRoomScreen extends StatelessWidget {
                             const SizedBox(width: AppDimens.paddingM),
                             Expanded(child: Text(p.displayName, style: Theme.of(context).textTheme.titleLarge)),
                             if (p.uid == room.hostUid)
-                              const Chip(
-                                label: Text('Host', style: TextStyle(fontFamily: 'Nunito')),
+                              Chip(
+                                label: Text(context.l10n.tr(en: 'Host', ru: 'Хост', kz: 'Хост'), style: const TextStyle(fontFamily: 'Nunito')),
                                 backgroundColor: AppColors.skyBlueSurface,
                               ),
                             const SizedBox(width: 8),
@@ -786,14 +787,14 @@ class WaitingRoomScreen extends StatelessWidget {
                 const SizedBox(height: AppDimens.paddingM),
                 // All players including host get a Ready toggle
                 NerpaButton(
-                  label: amReady ? 'Not Ready' : AppStrings.ready,
+                  label: amReady ? context.l10n.tr(en: 'Not Ready', ru: 'Не готов', kz: 'Дайын емес') : context.l10n.ready,
                   outlined: !amReady,
                   onPressed: () => ctx.read<RoomBloc>().add(SetReadyRequested(!amReady)),
                 ),
                 if (isHost) ...[
                   const SizedBox(height: AppDimens.paddingM),
                   NerpaButton(
-                    label: allReady ? AppStrings.startGame : 'Waiting for players...',
+                    label: allReady ? context.l10n.startGame : context.l10n.tr(en: 'Waiting for players...', ru: 'Ожидание игроков...', kz: 'Ойыншылар күтілуде...'),
                     onPressed: allReady
                         ? () => ctx.read<RoomBloc>().add(StartGameRequested())
                         : null,
@@ -804,7 +805,8 @@ class WaitingRoomScreen extends StatelessWidget {
           ),
         );
       },
-    );
+    ), // end BlocConsumer<RoomBloc>
+    ); // end BlocBuilder<LanguageCubit>
   }
 }
 
@@ -824,7 +826,8 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<RoomBloc, RoomState>(
+    return BlocBuilder<LanguageCubit, AppLanguage>(
+      builder: (_, __) => BlocConsumer<RoomBloc, RoomState>(
       listener: (ctx, state) {
         if (state is RoomFinished) context.pushReplacement('/multiplayer/results');
         if (state is RoomError) {
@@ -1011,7 +1014,8 @@ class _GameScreenState extends State<GameScreen> {
           ),
         );
       },
-    );
+    ), // end BlocConsumer<RoomBloc>
+    ); // end BlocBuilder<LanguageCubit>
   }
 }
 
@@ -1076,7 +1080,8 @@ class GameResultsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<RoomBloc, RoomState>(
+    return BlocBuilder<LanguageCubit, AppLanguage>(
+      builder: (_, __) => BlocBuilder<RoomBloc, RoomState>(
       builder: (ctx, state) {
         if (state is! RoomFinished) {
           return const Scaffold(body: Center(child: CircularProgressIndicator(color: AppColors.skyBlue)));
@@ -1092,7 +1097,7 @@ class GameResultsScreen extends StatelessWidget {
               children: [
                 const NerpaMascot(size: 100, expression: 'happy'),
                 const SizedBox(height: AppDimens.paddingM),
-                Text('🏆 Final Results', style: Theme.of(context).textTheme.displayMedium, textAlign: TextAlign.center),
+                Text('🏆 ${context.l10n.tr(en: 'Final Results', ru: 'Итоговые результаты', kz: 'Қорытынды нәтижелер')}', style: Theme.of(context).textTheme.displayMedium, textAlign: TextAlign.center),
                 const SizedBox(height: AppDimens.paddingXL),
                 Expanded(
                   child: ListView.builder(
@@ -1113,7 +1118,7 @@ class GameResultsScreen extends StatelessWidget {
                             Text(i < 3 ? medals[i] : '${i + 1}.', style: const TextStyle(fontSize: 24)),
                             const SizedBox(width: AppDimens.paddingM),
                             Expanded(child: Text(p.displayName, style: Theme.of(context).textTheme.titleLarge)),
-                            Text('${p.score} pts', style: const TextStyle(
+                            Text('${p.score} ${context.l10n.tr(en: 'pts', ru: 'очков', kz: 'ұпай')}', style: const TextStyle(
                               fontFamily: 'Nunito', fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.skyBlue,
                             )),
                           ],
@@ -1124,14 +1129,14 @@ class GameResultsScreen extends StatelessWidget {
                 ),
                 // Post-game chat
                 NerpaButton(
-                  label: 'Post-game Chat',
+                  label: context.l10n.tr(en: 'Post-game Chat', ru: 'Чат после игры', kz: 'Ойыннан кейінгі чат'),
                   icon: Icons.chat_bubble_outline_rounded,
                   outlined: true,
                   onPressed: () => context.push('/multiplayer/chat/$roomId'),
                 ),
                 const SizedBox(height: AppDimens.paddingM),
                 NerpaButton(
-                  label: 'Back to Home',
+                  label: context.l10n.tr(en: 'Back to Home', ru: 'На главную', kz: 'Басты бетке'),
                   onPressed: () {
                     ctx.read<RoomBloc>().add(LeaveRoomRequested());
                     context.go('/home');
@@ -1142,6 +1147,7 @@ class GameResultsScreen extends StatelessWidget {
           ),
         );
       },
-    );
+    ), // end BlocBuilder<RoomBloc>
+    ); // end BlocBuilder<LanguageCubit>
   }
 }
