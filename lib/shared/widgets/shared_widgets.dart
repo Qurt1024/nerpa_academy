@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:nerpa_academy/core/constants/app_constants.dart';
+import 'package:nerpa_academy/core/l10n/app_localizations.dart';
+import 'package:nerpa_academy/core/l10n/language_cubit.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 // ─── App Icon Widget ─────────────────────────────────────────────────────────
 
@@ -227,7 +230,7 @@ class SubjectCard extends StatelessWidget {
                   ),
                   if (lessonCount > 0)
                     Text(
-                      '$lessonCount уроков',
+                      '$lessonCount ${context.l10n.tr(en: 'lessons', ru: 'уроков', kz: 'сабақ')}',
                       style: TextStyle(
                         fontFamily: 'Nunito',
                         fontSize: 13,

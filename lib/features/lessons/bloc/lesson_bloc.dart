@@ -180,7 +180,7 @@ class LessonBloc extends Bloc<LessonEvent, LessonState> {
     emit(LessonLoading());
     try {
       final subjects =
-          await _repo.fetchSubjectsByIds(event.subjectIds, langCode: event.langCode);
+          await _repo.fetchSubjectsByIds(event.subjectIds);
       emit(SubjectsLoaded(subjects));
     } catch (e) {
       emit(LessonError(e.toString()));
@@ -191,7 +191,7 @@ class LessonBloc extends Bloc<LessonEvent, LessonState> {
       LoadAllSubjects event, Emitter<LessonState> emit) async {
     emit(LessonLoading());
     try {
-      final subjects = await _repo.fetchAllSubjects(langCode: event.langCode);
+      final subjects = await _repo.fetchAllSubjects();
       emit(SubjectsLoaded(subjects));
     } catch (e) {
       emit(LessonError(e.toString()));
@@ -203,7 +203,7 @@ class LessonBloc extends Bloc<LessonEvent, LessonState> {
     emit(LessonLoading());
     try {
       final subjects =
-          await _repo.fetchSubjectsByIds([event.subjectId], langCode: event.langCode);
+          await _repo.fetchSubjectsByIds([event.subjectId]);
       final lessons =
           await _repo.fetchLessonsForSubject(event.subjectId, langCode: event.langCode);
       emit(LessonsLoaded(subject: subjects.first, lessons: lessons));

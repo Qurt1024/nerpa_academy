@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:nerpa_academy/core/l10n/app_localizations.dart';
-import 'package:nerpa_academy/core/l10n/language_cubit.dart';
 import 'package:nerpa_academy/data/repositories/multiplayer_repository.dart';
+import 'core/l10n/language_cubit.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'data/repositories/auth_repository.dart';
@@ -28,11 +28,10 @@ void main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-
-  // Load persisted language before app launches
+  // Load persisted language before the first frame so the UI is never in
+  // the wrong language on startup.
   final languageCubit = LanguageCubit();
   await languageCubit.loadSavedLanguage();
-
   runApp(NerpaAcademyApp(languageCubit: languageCubit));
 }
 
@@ -67,6 +66,7 @@ class _NerpaAcademyAppState extends State<NerpaAcademyApp> {
   void dispose() {
     _authBloc.close();
     _lessonBloc.close();
+    widget.languageCubit.close();
     _routerNotifier.dispose();
     super.dispose();
   }
@@ -75,26 +75,32 @@ class _NerpaAcademyAppState extends State<NerpaAcademyApp> {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        // Language cubit must be outermost so l10n works everywhere
+        // LanguageCubit must come first — RoomBloc reads it via context below
         BlocProvider.value(value: widget.languageCubit),
         BlocProvider.value(value: _authBloc),
         BlocProvider.value(value: _lessonBloc),
         BlocProvider<RoomBloc>(
-          create: (_) {
+          create: (ctx) {
             final user = _authRepo.currentUser;
+            final langCode = ctx.read<LanguageCubit>().state.code;
             return RoomBloc(
               mpRepo: _multiplayerRepo,
               contentRepo: _contentRepo,
               currentUid: user?.uid ?? '',
-              displayName: user?.displayName ?? user?.email ?? 'Player',
+              displayName: user?.displayName ?? user?.email ?? 'Игрок',
+              langCode: langCode,
             );
           },
         ),
       ],
-      child: BlocBuilder<LanguageCubit, AppLanguage>(
-        // Rebuild MaterialApp when language changes so the whole tree gets new l10n
-        builder: (ctx, lang) {
-          return MaterialApp.router(
+      child: BlocListener<LanguageCubit, AppLanguage>(
+        // Keep RoomBloc's langCode in sync so multiplayer questions are
+        // always fetched in the currently selected language.
+        listener: (ctx, lang) {
+          ctx.read<RoomBloc>().add(SetLangCode(lang.code));
+        },
+        child: BlocBuilder<LanguageCubit, AppLanguage>(
+          builder: (_, __) => MaterialApp.router(
             title: 'Nerpa Academy',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
@@ -107,20 +113,18 @@ class _NerpaAcademyAppState extends State<NerpaAcademyApp> {
                 child: SafeArea(top: false, child: child!),
               );
             },
-          );
-        },
+          ),
+        ),
       ),
     );
   }
 }
 
-// Only notifies router on real login/logout transitions
+// Only notifies router on real login/logout — not on user data updates
 class _RouterNotifier extends ChangeNotifier {
   _RouterNotifier(AuthBloc authBloc) {
     authBloc.stream.listen((state) {
-      if (state is AuthAuthenticated ||
-          state is AuthUnauthenticated ||
-          state is AuthNeedsSubjectSelection) {
+      if (state is AuthAuthenticated || state is AuthUnauthenticated) {
         notifyListeners();
       }
     });

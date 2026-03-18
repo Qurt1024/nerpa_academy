@@ -21,17 +21,17 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _index = 0;
+
   static const _tabs = ['/home', '/multiplayer', '/profile'];
 
   @override
   Widget build(BuildContext context) {
-    // Rebuild nav labels when language changes
-    return BlocBuilder<LanguageCubit, AppLanguage>(
-      builder: (ctx, _) {
-        final l10n = context.l10n;
-        return Scaffold(
-          body: widget.child,
-          bottomNavigationBar: BottomNavigationBar(
+    return Scaffold(
+      body: widget.child,
+      bottomNavigationBar: BlocBuilder<LanguageCubit, AppLanguage>(
+        builder: (_, __) {
+          final l10n = context.l10n;
+          return BottomNavigationBar(
             currentIndex: _index,
             onTap: (i) {
               setState(() => _index = i);
@@ -51,77 +51,65 @@ class _MainShellState extends State<MainShell> {
                 label: l10n.profile,
               ),
             ],
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
 
 // ─── Home Screen ─────────────────────────────────────────────────────────────
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  // Track the last language we loaded subjects in so we can reload on change
-  String? _loadedLangCode;
-
-  void _loadSubjects(BuildContext context, String langCode) {
-    final authState = context.read<AuthBloc>().state;
-    final user = authState is AuthAuthenticated ? authState.user : null;
-    context.read<LessonBloc>().add(
-          user != null && user.selectedSubjectIds.isNotEmpty
-              ? LoadSubjects(user.selectedSubjectIds, langCode: langCode)
-              : LoadAllSubjects(langCode: langCode),
-        );
-    _loadedLangCode = langCode;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return BlocBuilder<LanguageCubit, AppLanguage>(
-      builder: (ctx, lang) {
-        final langCode = lang.code;
-        final l10n = AppLocalizations(lang);
+    return BlocBuilder<AuthBloc, AuthState>(
+      builder: (ctx, authState) {
+        final user =
+            authState is AuthAuthenticated ? authState.user : null;
 
-        return BlocBuilder<AuthBloc, AuthState>(
-          builder: (ctx, authState) {
-            final user = authState is AuthAuthenticated ? authState.user : null;
+        return BlocBuilder<LessonBloc, LessonState>(
+          builder: (ctx, state) {
+            // Trigger load only when the bloc is idle
+            if (state is LessonInitial) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final langCode = ctx.read<LanguageCubit>().state.code;
+                ctx.read<LessonBloc>().add(
+                      user != null && user.selectedSubjectIds.isNotEmpty
+                          ? LoadSubjects(user.selectedSubjectIds, langCode: langCode)
+                          : LoadAllSubjects(langCode: langCode),
+                    );
+              });
+            }
 
-            return BlocBuilder<LessonBloc, LessonState>(
-              builder: (ctx, lessonState) {
-                // Load (or reload) when: bloc is idle OR language changed
-                if (lessonState is LessonInitial || _loadedLangCode != langCode) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) _loadSubjects(context, langCode);
-                  });
-                }
+            if (state is LessonLoading) {
+              return const Scaffold(
+                body: Center(
+                  child: CircularProgressIndicator(color: AppColors.skyBlue),
+                ),
+              );
+            }
 
-                if (lessonState is LessonLoading) {
-                  return const Scaffold(
-                    body: Center(
-                      child: CircularProgressIndicator(color: AppColors.skyBlue),
-                    ),
-                  );
-                }
+            final subjects =
+                state is SubjectsLoaded ? state.subjects : <SubjectModel>[];
 
-                final subjects = lessonState is SubjectsLoaded
-                    ? lessonState.subjects
-                    : <SubjectModel>[];
-
+            // Wrap in LanguageCubit builder so greeting + labels + cards
+            // all rebuild instantly when the user switches language.
+            return BlocBuilder<LanguageCubit, AppLanguage>(
+              builder: (_, __) {
+                final l10n = context.l10n;
                 return Scaffold(
                   body: SafeArea(
                     child: CustomScrollView(
                       slivers: [
                         SliverPadding(
                           padding: const EdgeInsets.fromLTRB(
-                              AppDimens.paddingL, AppDimens.paddingL,
-                              AppDimens.paddingL, 0),
+                              AppDimens.paddingL,
+                              AppDimens.paddingL,
+                              AppDimens.paddingL,
+                              0),
                           sliver: SliverToBoxAdapter(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -130,11 +118,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                   children: [
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             l10n.hiUser(user?.displayName),
-                                            style: Theme.of(ctx).textTheme.headlineLarge,
+                                            style: Theme.of(ctx)
+                                                .textTheme
+                                                .headlineLarge,
                                           ),
                                           const SizedBox(height: AppDimens.paddingXS),
                                           Text(
@@ -156,7 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         ),
-                        if (subjects.isEmpty && lessonState is! LessonLoading)
+                        if (subjects.isEmpty && state is! LessonLoading)
                           SliverFillRemaining(
                             child: Center(
                               child: Column(
@@ -187,10 +178,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                       bottom: AppDimens.paddingM),
                                   child: SubjectCard(
                                     emoji: subjects[i].emoji,
-                                    title: subjects[i].title,
+                                    title: subjects[i].localTitle(__.code),
                                     lessonCount: subjects[i].lessonCount,
-                                    onTap: () =>
-                                        context.push('/lessons/${subjects[i].id}'),
+                                    onTap: () => context
+                                        .push('/lessons/${subjects[i].id}'),
                                   ),
                                 ),
                                 childCount: subjects.length,
@@ -211,6 +202,8 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ─── Lessons List Screen ──────────────────────────────────────────────────────
+// FIX: StatefulWidget so LoadLessons is always dispatched on entry,
+// regardless of the bloc's current state.
 
 class LessonsScreen extends StatefulWidget {
   final String subjectId;
@@ -225,17 +218,15 @@ class _LessonsScreenState extends State<LessonsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final langCode = context.read<LanguageCubit>().state.code;
-      context.read<LessonBloc>().add(
-            LoadLessons(widget.subjectId, langCode: langCode),
-          );
+      context.read<LessonBloc>().add(LoadLessons(widget.subjectId,
+          langCode: context.read<LanguageCubit>().state.code));
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<LanguageCubit, AppLanguage>(
-      builder: (ctx, lang) {
+      builder: (_, lang) {
         final l10n = AppLocalizations(lang);
         return BlocBuilder<LessonBloc, LessonState>(
           builder: (ctx, state) {
@@ -261,7 +252,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
                     ctx.read<LessonBloc>().add(ResetQuiz());
                     context.pop();
                   }),
-                  title: Text(state.subject.title),
+                  title: Text(state.subject.localTitle(lang.code)),
                 ),
                 body: state.lessons.isEmpty
                     ? Center(
@@ -284,15 +275,11 @@ class _LessonsScreenState extends State<LessonsScreen> {
                             number: i + 1,
                             title: lesson.title,
                             onTap: () {
-                              final langCode =
-                                  context.read<LanguageCubit>().state.code;
                               ctx.read<LessonBloc>().add(LoadQuiz(
-                                    lessonId: lesson.id,
-                                    subjectId: state.subject.id,
-                                    langCode: langCode,
-                                  ));
-                              context.push(
-                                  '/lesson/${state.subject.id}/${lesson.id}');
+                                  lessonId: lesson.id,
+                                  subjectId: state.subject.id,
+                                  langCode: lang.code));
+                              context.push('/lesson/${state.subject.id}/${lesson.id}');
                             },
                           );
                         },
@@ -300,7 +287,6 @@ class _LessonsScreenState extends State<LessonsScreen> {
               );
             }
 
-            // Error
             return Scaffold(
               appBar: AppBar(
                 leading: BackButton(onPressed: () => context.pop()),
@@ -321,13 +307,9 @@ class _LessonsScreenState extends State<LessonsScreen> {
                     ),
                     const SizedBox(height: AppDimens.paddingL),
                     ElevatedButton(
-                      onPressed: () {
-                        final langCode =
-                            context.read<LanguageCubit>().state.code;
-                        ctx.read<LessonBloc>().add(
-                              LoadLessons(widget.subjectId, langCode: langCode),
-                            );
-                      },
+                      onPressed: () => ctx
+                          .read<LessonBloc>()
+                          .add(LoadLessons(widget.subjectId, langCode: lang.code)),
                       child: Text(l10n.retry),
                     ),
                   ],
@@ -340,8 +322,6 @@ class _LessonsScreenState extends State<LessonsScreen> {
     );
   }
 }
-
-// ─── Lesson Tile ──────────────────────────────────────────────────────────────
 
 class _LessonTile extends StatelessWidget {
   final int number;

@@ -353,10 +353,6 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final appLang = context.read<LanguageCubit>().state;
-    final learnableLanguages = appLang.learnable;
-
     return BlocListener<AuthBloc, AuthState>(
       listener: (ctx, state) {
         if (state is AuthAuthenticated) context.go('/home');
@@ -366,97 +362,106 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
           );
         }
       },
-      child: Scaffold(
-        appBar: AppBar(
-          leading: BackButton(onPressed: () => context.pop()),
-          title: Text(l10n.step2of2),
-        ),
-        body: BlocBuilder<AuthBloc, AuthState>(
-          builder: (ctx, state) {
-            final processing = state is AuthLoading;
-            return Padding(
-              padding: const EdgeInsets.all(AppDimens.paddingL),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(l10n.chooseSubjects, style: Theme.of(context).textTheme.displayMedium),
-                  const SizedBox(height: AppDimens.paddingS),
-                  Text(l10n.selectedHighlighted, style: Theme.of(context).textTheme.bodyMedium),
-                  const SizedBox(height: AppDimens.paddingXL),
-                  if (_loading)
-                    const Expanded(
-                      child: Center(child: CircularProgressIndicator(color: AppColors.skyBlue)),
-                    )
-                  else if (_error != null)
-                    Expanded(
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.textSecondary),
-                            const SizedBox(height: AppDimens.paddingM),
-                            Text(l10n.couldNotLoadSubjects, textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.bodyMedium),
-                            const SizedBox(height: AppDimens.paddingM),
-                            NerpaButton(label: l10n.retry, onPressed: _loadSubjects),
-                          ],
+      // BlocBuilder on LanguageCubit so the whole screen rebuilds when
+      // the user picks a different app language on this screen.
+      child: BlocBuilder<LanguageCubit, AppLanguage>(
+        builder: (ctx, appLang) {
+          final l10n = AppLocalizations(appLang);
+          final learnableLanguages = appLang.learnable;
+          return Scaffold(
+            appBar: AppBar(
+              leading: BackButton(onPressed: () => context.pop()),
+              title: Text(l10n.step2of2),
+            ),
+            body: BlocBuilder<AuthBloc, AuthState>(
+              builder: (ctx, state) {
+                final processing = state is AuthLoading;
+                return Padding(
+                  padding: const EdgeInsets.all(AppDimens.paddingL),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Language picker ────────────────────────────────
+                      const _AppLanguagePicker(),
+                      const SizedBox(height: AppDimens.paddingXL),
+                      Text(l10n.chooseSubjects, style: Theme.of(context).textTheme.displayMedium),
+                      const SizedBox(height: AppDimens.paddingS),
+                      Text(l10n.selectedHighlighted, style: Theme.of(context).textTheme.bodyMedium),
+                      const SizedBox(height: AppDimens.paddingM),
+                      if (_loading)
+                        const Expanded(
+                          child: Center(child: CircularProgressIndicator(color: AppColors.skyBlue)),
+                        )
+                      else if (_error != null)
+                        Expanded(
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.textSecondary),
+                                const SizedBox(height: AppDimens.paddingM),
+                                Text(l10n.couldNotLoadSubjects, textAlign: TextAlign.center,
+                                    style: Theme.of(context).textTheme.bodyMedium),
+                                const SizedBox(height: AppDimens.paddingM),
+                                NerpaButton(label: l10n.retry, onPressed: _loadSubjects),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: ListView(
+                            children: [
+                              ..._subjects
+                                  .where((s) => !s.id.startsWith('language_'))
+                                  .map((s) => Padding(
+                                        padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
+                                        child: SubjectCard(
+                                          emoji: s.emoji,
+                                          title: s.localTitle(appLang.code),
+                                          lessonCount: s.lessonCount,
+                                          selected: _selected.contains(s.id),
+                                          onTap: () => _toggle(s.id),
+                                        ),
+                                      )),
+                              if (learnableLanguages.isNotEmpty) ...[
+                                const SizedBox(height: AppDimens.paddingM),
+                                Text(l10n.chooseLanguageSubject,
+                                    style: Theme.of(context).textTheme.headlineSmall),
+                                const SizedBox(height: AppDimens.paddingM),
+                                ...learnableLanguages.map((lang) => Padding(
+                                      padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
+                                      child: SubjectCard(
+                                        emoji: _langEmoji(lang),
+                                        title: l10n.languageSubjectName(lang),
+                                        lessonCount: 0,
+                                        selected: _selectedLanguageSubjectId == lang.subjectId,
+                                        onTap: () => setState(() {
+                                          _selectedLanguageSubjectId =
+                                              _selectedLanguageSubjectId == lang.subjectId
+                                                  ? null
+                                                  : lang.subjectId;
+                                        }),
+                                      ),
+                                    )),
+                              ],
+                              const SizedBox(height: AppDimens.paddingM),
+                            ],
+                          ),
                         ),
+                      const SizedBox(height: AppDimens.paddingM),
+                      NerpaButton(
+                        label: l10n.continueText,
+                        loading: processing,
+                        onPressed: processing ? null : _submit,
                       ),
-                    )
-                  else
-                    Expanded(
-                      child: ListView(
-                        children: [
-                          // Regular subjects
-                          ..._subjects
-                              .where((s) => !s.id.startsWith('language_'))
-                              .map((s) => Padding(
-                                    padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
-                                    child: SubjectCard(
-                                      emoji: s.emoji,
-                                      title: s.title,
-                                      lessonCount: s.lessonCount,
-                                      selected: _selected.contains(s.id),
-                                      onTap: () => _toggle(s.id),
-                                    ),
-                                  )),
-                          // Language subject section
-                          if (learnableLanguages.isNotEmpty) ...[
-                            const SizedBox(height: AppDimens.paddingM),
-                            Text(l10n.chooseLanguageSubject,
-                                style: Theme.of(context).textTheme.headlineSmall),
-                            const SizedBox(height: AppDimens.paddingM),
-                            ...learnableLanguages.map((lang) => Padding(
-                                  padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
-                                  child: SubjectCard(
-                                    emoji: _langEmoji(lang),
-                                    title: l10n.languageSubjectName(lang),
-                                    lessonCount: 0,
-                                    selected: _selectedLanguageSubjectId == lang.subjectId,
-                                    onTap: () => setState(() {
-                                      _selectedLanguageSubjectId =
-                                          _selectedLanguageSubjectId == lang.subjectId
-                                              ? null
-                                              : lang.subjectId;
-                                    }),
-                                  ),
-                                )),
-                          ],
-                          const SizedBox(height: AppDimens.paddingM),
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: AppDimens.paddingM),
-                  NerpaButton(
-                    label: l10n.continueText,
-                    loading: processing,
-                    onPressed: processing ? null : _submit,
+                    ],
                   ),
-                ],
-              ),
-            );
-          },
-        ),
+                );
+              },
+            ),
+          );
+        },
       ),
     );
   }
@@ -523,10 +528,6 @@ class _SubjectSelectionScreenState extends State<SubjectSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final appLang = context.read<LanguageCubit>().state;
-    final learnableLanguages = appLang.learnable;
-
     return BlocListener<AuthBloc, AuthState>(
       listener: (ctx, state) {
         if (state is AuthAuthenticated) context.go('/home');
@@ -536,99 +537,167 @@ class _SubjectSelectionScreenState extends State<SubjectSelectionScreen> {
           );
         }
       },
-      child: Scaffold(
-        appBar: AppBar(title: Text(l10n.chooseSubjects)),
-        body: BlocBuilder<AuthBloc, AuthState>(
-          builder: (ctx, state) {
-            final processing = state is AuthLoading;
-            return Padding(
-              padding: const EdgeInsets.all(AppDimens.paddingL),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(l10n.chooseSubjects, style: Theme.of(context).textTheme.displayMedium),
-                  const SizedBox(height: AppDimens.paddingS),
-                  Text(l10n.selectedHighlighted, style: Theme.of(context).textTheme.bodyMedium),
-                  const SizedBox(height: AppDimens.paddingXL),
-                  if (_loading)
-                    const Expanded(
-                      child: Center(child: CircularProgressIndicator(color: AppColors.skyBlue)),
-                    )
-                  else if (_error != null)
-                    Expanded(
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.textSecondary),
-                            const SizedBox(height: AppDimens.paddingM),
-                            Text(l10n.couldNotLoadSubjects, textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.bodyMedium),
-                            const SizedBox(height: AppDimens.paddingM),
-                            NerpaButton(label: l10n.retry, onPressed: _loadSubjects),
-                          ],
+      child: BlocBuilder<LanguageCubit, AppLanguage>(
+        builder: (ctx, appLang) {
+          final l10n = AppLocalizations(appLang);
+          final learnableLanguages = appLang.learnable;
+          return Scaffold(
+            appBar: AppBar(title: Text(l10n.chooseSubjects)),
+            body: BlocBuilder<AuthBloc, AuthState>(
+              builder: (ctx, state) {
+                final processing = state is AuthLoading;
+                return Padding(
+                  padding: const EdgeInsets.all(AppDimens.paddingL),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Language picker ──────────────────────────────
+                      const _AppLanguagePicker(),
+                      const SizedBox(height: AppDimens.paddingXL),
+                      Text(l10n.chooseSubjects, style: Theme.of(context).textTheme.displayMedium),
+                      const SizedBox(height: AppDimens.paddingS),
+                      Text(l10n.selectedHighlighted, style: Theme.of(context).textTheme.bodyMedium),
+                      const SizedBox(height: AppDimens.paddingM),
+                      if (_loading)
+                        const Expanded(
+                          child: Center(child: CircularProgressIndicator(color: AppColors.skyBlue)),
+                        )
+                      else if (_error != null)
+                        Expanded(
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.textSecondary),
+                                const SizedBox(height: AppDimens.paddingM),
+                                Text(l10n.couldNotLoadSubjects, textAlign: TextAlign.center,
+                                    style: Theme.of(context).textTheme.bodyMedium),
+                                const SizedBox(height: AppDimens.paddingM),
+                                NerpaButton(label: l10n.retry, onPressed: _loadSubjects),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: ListView(
+                            children: [
+                              ..._subjects
+                                  .where((s) => !s.id.startsWith('language_'))
+                                  .map((s) => Padding(
+                                        padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
+                                        child: SubjectCard(
+                                          emoji: s.emoji,
+                                          title: s.localTitle(appLang.code),
+                                          lessonCount: s.lessonCount,
+                                          selected: _selected.contains(s.id),
+                                          onTap: () => setState(() {
+                                            if (_selected.contains(s.id)) {
+                                              _selected.remove(s.id);
+                                            } else {
+                                              _selected.add(s.id);
+                                            }
+                                          }),
+                                        ),
+                                      )),
+                              if (learnableLanguages.isNotEmpty) ...[
+                                const SizedBox(height: AppDimens.paddingM),
+                                Text(l10n.chooseLanguageSubject,
+                                    style: Theme.of(context).textTheme.headlineSmall),
+                                const SizedBox(height: AppDimens.paddingM),
+                                ...learnableLanguages.map((lang) => Padding(
+                                      padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
+                                      child: SubjectCard(
+                                        emoji: _langEmoji(lang),
+                                        title: l10n.languageSubjectName(lang),
+                                        lessonCount: 0,
+                                        selected: _selectedLanguageSubjectId == lang.subjectId,
+                                        onTap: () => setState(() {
+                                          _selectedLanguageSubjectId =
+                                              _selectedLanguageSubjectId == lang.subjectId
+                                                  ? null
+                                                  : lang.subjectId;
+                                        }),
+                                      ),
+                                    )),
+                              ],
+                              const SizedBox(height: AppDimens.paddingM),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: AppDimens.paddingM),
+                      NerpaButton(
+                        label: l10n.continueText,
+                        loading: processing,
+                        onPressed: processing ? null : _submit,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─── App Language Picker (used on subject selection screens) ─────────────────
+// Lets new users choose their app language before picking subjects, so that
+// the "language to learn" section correctly excludes their own language.
+
+class _AppLanguagePicker extends StatelessWidget {
+  const _AppLanguagePicker();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<LanguageCubit, AppLanguage>(
+      builder: (ctx, currentLang) {
+        final l10n = AppLocalizations(currentLang);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.appLanguageLabel,
+                style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: AppDimens.paddingS),
+            Row(
+              children: AppLanguage.values.map((lang) {
+                final selected = lang == currentLang;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: GestureDetector(
+                      onTap: () => ctx.read<LanguageCubit>().changeLanguage(lang),
+                      child: AnimatedContainer(
+                        duration: AppDimens.animFast,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: selected ? AppColors.skyBlue : AppColors.scaffold,
+                          borderRadius: BorderRadius.circular(AppDimens.radiusM),
+                          border: Border.all(
+                            color: selected ? AppColors.skyBlue : AppColors.cardBorder,
+                          ),
+                        ),
+                        child: Text(
+                          lang.displayName,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'Nunito',
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: selected ? AppColors.white : AppColors.textPrimary,
+                          ),
                         ),
                       ),
-                    )
-                  else
-                    Expanded(
-                      child: ListView(
-                        children: [
-                          ..._subjects
-                              .where((s) => !s.id.startsWith('language_'))
-                              .map((s) => Padding(
-                                    padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
-                                    child: SubjectCard(
-                                      emoji: s.emoji,
-                                      title: s.title,
-                                      lessonCount: s.lessonCount,
-                                      selected: _selected.contains(s.id),
-                                      onTap: () => setState(() {
-                                        if (_selected.contains(s.id)) {
-                                          _selected.remove(s.id);
-                                        } else {
-                                          _selected.add(s.id);
-                                        }
-                                      }),
-                                    ),
-                                  )),
-                          if (learnableLanguages.isNotEmpty) ...[
-                            const SizedBox(height: AppDimens.paddingM),
-                            Text(l10n.chooseLanguageSubject,
-                                style: Theme.of(context).textTheme.headlineSmall),
-                            const SizedBox(height: AppDimens.paddingM),
-                            ...learnableLanguages.map((lang) => Padding(
-                                  padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
-                                  child: SubjectCard(
-                                    emoji: _langEmoji(lang),
-                                    title: l10n.languageSubjectName(lang),
-                                    lessonCount: 0,
-                                    selected: _selectedLanguageSubjectId == lang.subjectId,
-                                    onTap: () => setState(() {
-                                      _selectedLanguageSubjectId =
-                                          _selectedLanguageSubjectId == lang.subjectId
-                                              ? null
-                                              : lang.subjectId;
-                                    }),
-                                  ),
-                                )),
-                          ],
-                          const SizedBox(height: AppDimens.paddingM),
-                        ],
-                      ),
                     ),
-                  const SizedBox(height: AppDimens.paddingM),
-                  NerpaButton(
-                    label: l10n.continueText,
-                    loading: processing,
-                    onPressed: processing ? null : _submit,
                   ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
+                );
+              }).toList(),
+            ),
+          ],
+        );
+      },
     );
   }
 }

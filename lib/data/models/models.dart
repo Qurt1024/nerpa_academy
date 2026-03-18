@@ -1,5 +1,3 @@
-import 'package:nerpa_academy/core/l10n/app_localizations.dart';
-
 // ─── User Model ────────────────────────────────────────────────────────────
 
 class UserModel {
@@ -11,7 +9,6 @@ class UserModel {
   final List<String> completedLessons;
   final int totalScore;
   final DateTime createdAt;
-  final String appLanguage;
 
   const UserModel({
     required this.uid,
@@ -22,10 +19,7 @@ class UserModel {
     this.completedLessons = const [],
     this.totalScore = 0,
     required this.createdAt,
-    this.appLanguage = 'en',
   });
-
-  AppLanguage get language => AppLanguageExtension.fromCode(appLanguage);
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
     return UserModel(
@@ -33,11 +27,14 @@ class UserModel {
       email: map['email'] as String,
       displayName: map['displayName'] as String?,
       photoUrl: map['photoUrl'] as String?,
-      selectedSubjectIds: List<String>.from(map['selectedSubjectIds'] ?? []),
-      completedLessons: List<String>.from(map['completedLessons'] ?? []),
+      selectedSubjectIds:
+          List<String>.from(map['selectedSubjectIds'] ?? []),
+      completedLessons:
+          List<String>.from(map['completedLessons'] ?? []),
       totalScore: (map['totalScore'] as num?)?.toInt() ?? 0,
-      createdAt: DateTime.fromMillisecondsSinceEpoch((map['createdAt'] as int?) ?? 0),
-      appLanguage: map['appLanguage'] as String? ?? 'en',
+      createdAt: DateTime.fromMillisecondsSinceEpoch(
+        (map['createdAt'] as int?) ?? 0,
+      ),
     );
   }
 
@@ -50,7 +47,6 @@ class UserModel {
         'completedLessons': completedLessons,
         'totalScore': totalScore,
         'createdAt': createdAt.millisecondsSinceEpoch,
-        'appLanguage': appLanguage,
       };
 
   UserModel copyWith({
@@ -59,7 +55,6 @@ class UserModel {
     List<String>? selectedSubjectIds,
     List<String>? completedLessons,
     int? totalScore,
-    String? appLanguage,
   }) =>
       UserModel(
         uid: uid,
@@ -70,29 +65,15 @@ class UserModel {
         completedLessons: completedLessons ?? this.completedLessons,
         totalScore: totalScore ?? this.totalScore,
         createdAt: createdAt,
-        appLanguage: appLanguage ?? this.appLanguage,
       );
-}
-
-// ─── Localisation helper ────────────────────────────────────────────────────
-// Reads from a {en, ru, kz} map field, falling back to a plain string field.
-String _localised(Map<String, dynamic> map, String mapKey, String fallbackKey, String langCode) {
-  final translations = map[mapKey];
-  if (translations is Map) {
-    final val = translations[langCode] as String?;
-    if (val != null && val.isNotEmpty) return val;
-    // Fallback chain: requested lang → en → raw field
-    final en = translations['en'] as String?;
-    if (en != null && en.isNotEmpty) return en;
-  }
-  return map[fallbackKey] as String? ?? '';
 }
 
 // ─── Subject Model ──────────────────────────────────────────────────────────
 
 class SubjectModel {
   final String id;
-  final String title;
+  final String title;           // English fallback (always populated)
+  final Map<String, String> titles; // {en, ru, kz} localised names
   final String emoji;
   final String colorHex;
   final int lessonCount;
@@ -101,18 +82,32 @@ class SubjectModel {
   const SubjectModel({
     required this.id,
     required this.title,
+    this.titles = const {},
     required this.emoji,
     required this.colorHex,
     required this.lessonCount,
     required this.order,
   });
 
-  factory SubjectModel.fromMap(String id, Map<String, dynamic> map, {String langCode = 'en'}) {
+  /// Returns the localised title for [langCode], falling back to English.
+  String localTitle(String langCode) =>
+      titles[langCode] ?? titles['en'] ?? title;
+
+  factory SubjectModel.fromMap(String id, Map<String, dynamic> map) {
+    // Read multilingual titles map if present
+    final rawTitles = map['titles'];
+    final titlesMap = rawTitles is Map
+        ? Map<String, String>.fromEntries(
+            rawTitles.entries.map((e) => MapEntry(e.key.toString(), e.value.toString())))
+        : <String, String>{};
+
+    // English title: prefer titles.en, fall back to legacy 'title' field
+    final enTitle = titlesMap['en'] ?? map['title'] as String? ?? 'Untitled';
+
     return SubjectModel(
       id: id,
-      title: _localised(map, 'titles', 'title', langCode).isNotEmpty
-          ? _localised(map, 'titles', 'title', langCode)
-          : map['title'] as String? ?? 'Untitled',
+      title: enTitle,
+      titles: titlesMap,
       emoji: map['emoji'] as String? ?? '📚',
       colorHex: map['colorHex'] as String? ?? '#29B6F6',
       lessonCount: (map['lessonCount'] as num?)?.toInt() ?? 0,
@@ -122,6 +117,7 @@ class SubjectModel {
 
   Map<String, dynamic> toMap() => {
         'title': title,
+        'titles': titles,
         'emoji': emoji,
         'colorHex': colorHex,
         'lessonCount': lessonCount,
@@ -151,19 +147,32 @@ class LessonModel {
   });
 
   factory LessonModel.fromMap(String id, Map<String, dynamic> map, {String langCode = 'en'}) {
+    // Support multilingual 'theoryTexts' map, 'theory' (EN fallback), or legacy 'theoryText'
+    String? theoryText;
+    final theoryTexts = map['theoryTexts'];
+    if (theoryTexts is Map) {
+      theoryText = theoryTexts[langCode] as String? ?? theoryTexts['en'] as String?;
+    }
+    theoryText ??= map['theory'] as String? ?? map['theoryText'] as String?;
+
+    // Support multilingual 'titles' map or legacy 'title'
+    String title = 'Untitled';
+    final titles = map['titles'];
+    if (titles is Map) {
+      title = titles[langCode] as String? ?? titles['en'] as String? ?? 'Untitled';
+    } else {
+      title = map['title'] as String? ?? 'Untitled';
+    }
+
     return LessonModel(
       id: id,
       subjectId: map['subjectId'] as String? ?? '',
-      title: _localised(map, 'titles', 'title', langCode).isNotEmpty
-          ? _localised(map, 'titles', 'title', langCode)
-          : map['title'] as String? ?? 'Untitled',
-      theoryText: () {
-        final t = _localised(map, 'theoryTexts', 'theoryText', langCode);
-        return t.isNotEmpty ? t : null;
-      }(),
+      title: title,
+      theoryText: theoryText,
       imageUrl: map['imageUrl'] as String?,
       order: (map['order'] as num?)?.toInt() ?? 0,
-      hasTheory: map['hasTheory'] as bool? ?? false,
+      // Auto-derive: show theory screen whenever there is theory text
+      hasTheory: theoryText != null && theoryText.trim().isNotEmpty,
     );
   }
 
@@ -186,7 +195,7 @@ class QuestionModel {
   final String lessonId;
   final String questionText;
   final QuestionType type;
-  final List<String> options;
+  final List<String> options; // for MCQ
   final String correctAnswer;
   final int order;
   final String? imageUrl;
@@ -203,41 +212,43 @@ class QuestionModel {
   });
 
   factory QuestionModel.fromMap(String id, Map<String, dynamic> map, {String langCode = 'en'}) {
+    // ── type ──────────────────────────────────────────────────────────────────
     final typeStr = map['type'] as String? ?? 'multipleChoice';
-    final isFree = typeStr == 'freeInput';
+    final isFree = typeStr == 'freeInput' || typeStr == 'free_input';
 
-    // Resolve localised question text
-    final questionText = _localised(map, 'questionTexts', 'questionText', langCode).isNotEmpty
-        ? _localised(map, 'questionTexts', 'questionText', langCode)
-        : map['questionText'] as String? ?? '';
+    // ── question text ─────────────────────────────────────────────────────────
+    String questionText = '';
+    final qTexts = map['questionTexts'];
+    if (qTexts is Map) {
+      questionText = qTexts[langCode] as String? ?? qTexts['en'] as String? ?? '';
+    }
+    if (questionText.isEmpty) {
+      questionText = map['questionText'] as String? ?? '';
+    }
 
-    // Resolve localised options
-    List<String> options;
-    final optionSets = map['optionSets'];
-    if (optionSets is Map) {
-      final langOpts = optionSets[langCode];
-      if (langOpts is List && langOpts.isNotEmpty) {
-        options = List<String>.from(langOpts);
-      } else {
-        final enOpts = optionSets['en'];
-        options = enOpts is List ? List<String>.from(enOpts) : List<String>.from(map['options'] ?? []);
-      }
-    } else {
+    // ── options ───────────────────────────────────────────────────────────────
+    List<String> options = [];
+    final optSets = map['optionSets'];
+    if (optSets is Map) {
+      final rawOpts = optSets[langCode] ?? optSets['en'];
+      if (rawOpts is List) options = List<String>.from(rawOpts);
+    }
+    if (options.isEmpty) {
       options = List<String>.from(map['options'] ?? []);
     }
 
-    // Resolve localised correct answer
-    String correctAnswer;
-    final correctAnswers = map['correctAnswers'];
-    if (correctAnswers is Map) {
-      correctAnswer = correctAnswers[langCode] as String? ??
-          correctAnswers['en'] as String? ??
-          map['correctAnswer'] as String? ?? '';
-    } else {
-      // Legacy: correctAnswer stored as plain string or via correctOptionIndex
+    // ── correct answer ────────────────────────────────────────────────────────
+    String correctAnswer = '';
+    final corrAnswers = map['correctAnswers'];
+    if (corrAnswers is Map) {
+      correctAnswer = corrAnswers[langCode] as String? ?? corrAnswers['en'] as String? ?? '';
+    }
+    if (correctAnswer.isEmpty) {
       final correctIndex = (map['correctOptionIndex'] as num?)?.toInt();
       correctAnswer = map['correctAnswer'] as String? ??
-          (correctIndex != null && correctIndex < options.length ? options[correctIndex] : '');
+          (correctIndex != null && correctIndex < options.length
+              ? options[correctIndex]
+              : '');
     }
 
     return QuestionModel(
@@ -276,19 +287,33 @@ class RoomPlayer {
   final bool isReady;
   final int score;
 
-  const RoomPlayer({required this.uid, required this.displayName, this.isReady = false, this.score = 0});
+  const RoomPlayer({
+    required this.uid,
+    required this.displayName,
+    this.isReady = false,
+    this.score = 0,
+  });
 
   factory RoomPlayer.fromMap(Map<String, dynamic> map) => RoomPlayer(
         uid: map['uid'] as String,
-        displayName: map['displayName'] as String? ?? 'Player',
+        displayName: map['displayName'] as String? ?? 'Игрок',
         isReady: map['isReady'] as bool? ?? false,
         score: (map['score'] as num?)?.toInt() ?? 0,
       );
 
-  Map<String, dynamic> toMap() => {'uid': uid, 'displayName': displayName, 'isReady': isReady, 'score': score};
+  Map<String, dynamic> toMap() => {
+        'uid': uid,
+        'displayName': displayName,
+        'isReady': isReady,
+        'score': score,
+      };
 
-  RoomPlayer copyWith({bool? isReady, int? score}) =>
-      RoomPlayer(uid: uid, displayName: displayName, isReady: isReady ?? this.isReady, score: score ?? this.score);
+  RoomPlayer copyWith({bool? isReady, int? score}) => RoomPlayer(
+        uid: uid,
+        displayName: displayName,
+        isReady: isReady ?? this.isReady,
+        score: score ?? this.score,
+      );
 }
 
 class RoomModel {
@@ -302,28 +327,50 @@ class RoomModel {
   final DateTime createdAt;
 
   const RoomModel({
-    required this.id, required this.hostUid, required this.subjectId,
-    required this.lessonId, required this.status, required this.players,
-    this.currentQuestionIndex = 0, required this.createdAt,
+    required this.id,
+    required this.hostUid,
+    required this.subjectId,
+    required this.lessonId,
+    required this.status,
+    required this.players,
+    this.currentQuestionIndex = 0,
+    required this.createdAt,
   });
 
   factory RoomModel.fromMap(String id, Map<String, dynamic> map) {
     final statusStr = map['status'] as String? ?? 'waiting';
     return RoomModel(
-      id: id, hostUid: map['hostUid'] as String,
+      id: id,
+      hostUid: map['hostUid'] as String,
       subjectId: map['subjectId'] as String? ?? '',
       lessonId: map['lessonId'] as String? ?? '',
-      status: statusStr == 'playing' ? RoomStatus.playing : statusStr == 'finished' ? RoomStatus.finished : RoomStatus.waiting,
-      players: (map['players'] as Map<dynamic, dynamic>?)?.values
-              .map((e) => RoomPlayer.fromMap(Map<String, dynamic>.from(e))).toList() ?? [],
-      currentQuestionIndex: (map['currentQuestionIndex'] as num?)?.toInt() ?? 0,
-      createdAt: DateTime.fromMillisecondsSinceEpoch((map['createdAt'] as int?) ?? 0),
+      status: statusStr == 'playing'
+          ? RoomStatus.playing
+          : statusStr == 'finished'
+              ? RoomStatus.finished
+              : RoomStatus.waiting,
+      players: (map['players'] as Map<dynamic, dynamic>?)
+              ?.values
+              .map((e) => RoomPlayer.fromMap(Map<String, dynamic>.from(e)))
+              .toList() ??
+          [],
+      currentQuestionIndex:
+          (map['currentQuestionIndex'] as num?)?.toInt() ?? 0,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(
+        (map['createdAt'] as int?) ?? 0,
+      ),
     );
   }
 
   Map<String, dynamic> toMap() => {
-        'hostUid': hostUid, 'subjectId': subjectId, 'lessonId': lessonId,
-        'status': status == RoomStatus.playing ? 'playing' : status == RoomStatus.finished ? 'finished' : 'waiting',
+        'hostUid': hostUid,
+        'subjectId': subjectId,
+        'lessonId': lessonId,
+        'status': status == RoomStatus.playing
+            ? 'playing'
+            : status == RoomStatus.finished
+                ? 'finished'
+                : 'waiting',
         'players': {for (var p in players) p.uid: p.toMap()},
         'currentQuestionIndex': currentQuestionIndex,
         'createdAt': createdAt.millisecondsSinceEpoch,
@@ -340,15 +387,32 @@ class ChatMessage {
   final String text;
   final DateTime sentAt;
 
-  const ChatMessage({required this.id, required this.roomId, required this.senderUid, required this.senderName, required this.text, required this.sentAt});
+  const ChatMessage({
+    required this.id,
+    required this.roomId,
+    required this.senderUid,
+    required this.senderName,
+    required this.text,
+    required this.sentAt,
+  });
 
-  factory ChatMessage.fromMap(String id, Map<String, dynamic> map) => ChatMessage(
-        id: id, roomId: map['roomId'] as String? ?? '',
+  factory ChatMessage.fromMap(String id, Map<String, dynamic> map) =>
+      ChatMessage(
+        id: id,
+        roomId: map['roomId'] as String? ?? '',
         senderUid: map['senderUid'] as String,
-        senderName: map['senderName'] as String? ?? 'Player',
+        senderName: map['senderName'] as String? ?? 'Игрок',
         text: map['text'] as String,
-        sentAt: DateTime.fromMillisecondsSinceEpoch((map['sentAt'] as int?) ?? 0),
+        sentAt: DateTime.fromMillisecondsSinceEpoch(
+          (map['sentAt'] as int?) ?? 0,
+        ),
       );
 
-  Map<String, dynamic> toMap() => {'roomId': roomId, 'senderUid': senderUid, 'senderName': senderName, 'text': text, 'sentAt': sentAt.millisecondsSinceEpoch};
+  Map<String, dynamic> toMap() => {
+        'roomId': roomId,
+        'senderUid': senderUid,
+        'senderName': senderName,
+        'text': text,
+        'sentAt': sentAt.millisecondsSinceEpoch,
+      };
 }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nerpa_academy/core/constants/app_constants.dart';
+import 'package:nerpa_academy/core/l10n/app_localizations.dart';
+import 'package:nerpa_academy/core/l10n/language_cubit.dart';
 import 'package:nerpa_academy/data/models/models.dart';
 import 'package:nerpa_academy/data/repositories/auth_repository.dart';
 import 'package:nerpa_academy/features/auth/bloc/auth_bloc.dart';
@@ -22,13 +24,14 @@ class TheoryScreenWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(onPressed: () {
           context.read<LessonBloc>().add(ResetQuiz());
           context.pop();
         }),
-        title: const Text('Theory'),
+        title: Text(l10n.tr(en: 'Theory', ru: 'Теория', kz: 'Теория')),
       ),
       body: Column(
         children: [
@@ -43,10 +46,9 @@ class TheoryScreenWidget extends StatelessWidget {
                     style: Theme.of(context).textTheme.displayMedium,
                   ),
                   const SizedBox(height: AppDimens.paddingM),
-                  if (lesson.imageUrl != null)
+                  if (lesson.imageUrl != null && lesson.imageUrl!.isNotEmpty)
                     ClipRRect(
-                      borderRadius:
-                          BorderRadius.circular(AppDimens.radiusL),
+                      borderRadius: BorderRadius.circular(AppDimens.radiusL),
                       child: Image.network(
                         lesson.imageUrl!,
                         width: double.infinity,
@@ -58,7 +60,7 @@ class TheoryScreenWidget extends StatelessWidget {
                   else
                     _TheoryPlaceholder(),
                   const SizedBox(height: AppDimens.paddingL),
-                  if (lesson.theoryText != null)
+                  if (lesson.theoryText != null && lesson.theoryText!.isNotEmpty)
                     Text(
                       lesson.theoryText!,
                       style: Theme.of(context)
@@ -73,7 +75,7 @@ class TheoryScreenWidget extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(AppDimens.paddingL),
             child: NerpaButton(
-              label: AppStrings.startLesson,
+              label: l10n.startLesson,
               icon: Icons.play_arrow_rounded,
               onPressed: () {
                 context.read<LessonBloc>().add(StartQuiz());
@@ -97,6 +99,70 @@ class _TheoryPlaceholder extends StatelessWidget {
       ),
       child: const Center(child: NerpaMascot(size: 120)),
     );
+  }
+}
+
+// ─── Question Image (with Nerpa fallback) ─────────────────────────────────────
+// Shows the question's image if one exists; falls back to the nerpa mascot
+// which changes expression based on the current answer status.
+
+class _QuestionImage extends StatelessWidget {
+  final String? imageUrl;
+  final AnswerStatus answerStatus;
+
+  const _QuestionImage({required this.imageUrl, required this.answerStatus});
+
+  String get _expression {
+    switch (answerStatus) {
+      case AnswerStatus.correct:   return 'happy';
+      case AnswerStatus.incorrect: return 'sad';
+      case AnswerStatus.idle:      return 'default';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl != null && imageUrl!.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(AppDimens.radiusL),
+        child: Image.network(
+          imageUrl!,
+          height: 180,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          // On load error fall back to mascot so the quiz never breaks
+          errorBuilder: (_, __, ___) => _NerpaMascotBox(expression: _expression),
+          loadingBuilder: (_, child, progress) {
+            if (progress == null) return child;
+            return SizedBox(
+              height: 180,
+              child: Center(
+                child: CircularProgressIndicator(
+                  color: AppColors.skyBlue,
+                  value: progress.expectedTotalBytes != null
+                      ? progress.cumulativeBytesLoaded /
+                            progress.expectedTotalBytes!
+                      : null,
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    // No image — show the nerpa mascot as default
+    return _NerpaMascotBox(expression: _expression);
+  }
+}
+
+class _NerpaMascotBox extends StatelessWidget {
+  final String expression;
+  const _NerpaMascotBox({required this.expression});
+
+  @override
+  Widget build(BuildContext context) {
+    return NerpaMascot(size: 100, expression: expression);
   }
 }
 
@@ -188,15 +254,9 @@ class _QuizScreenWidgetState extends State<QuizScreenWidget> {
                   child: Column(
                     children: [
                       const SizedBox(height: AppDimens.paddingM),
-                      NerpaMascot(
-                        size: 100,
-                        expression:
-                            state.answerStatus == AnswerStatus.correct
-                                ? 'happy'
-                                : state.answerStatus ==
-                                        AnswerStatus.incorrect
-                                    ? 'sad'
-                                    : 'default',
+                      _QuestionImage(
+                        imageUrl: q.imageUrl,
+                        answerStatus: state.answerStatus,
                       ),
                       const SizedBox(height: AppDimens.paddingL),
                       // Question card
@@ -326,7 +386,7 @@ class _QuizScreenWidgetState extends State<QuizScreenWidget> {
         const SizedBox(height: AppDimens.paddingL),
         if (state.answerStatus == AnswerStatus.idle)
           NerpaButton(
-            label: AppStrings.nextQuestion,
+            label: context.l10n.nextQuestion,
             onPressed: _inputCtrl.text.trim().isEmpty
                 ? null
                 : () => context
@@ -353,6 +413,7 @@ class _AnswerFeedbackBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final color =
         isCorrect ? AppColors.answerCorrect : AppColors.answerWrong;
     return AnimatedContainer(
@@ -383,7 +444,7 @@ class _AnswerFeedbackBar extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  isCorrect ? AppStrings.correct : AppStrings.incorrect,
+                  isCorrect ? l10n.correct : l10n.incorrect,
                   style: TextStyle(
                     fontFamily: 'Nunito',
                     fontWeight: FontWeight.w800,
@@ -393,7 +454,7 @@ class _AnswerFeedbackBar extends StatelessWidget {
                 ),
                 if (!isCorrect)
                   Text(
-                    'Correct answer: $correctAnswer',
+                    '${l10n.tr(en: 'Correct answer', ru: 'Правильный ответ', kz: 'Дұрыс жауап')}: $correctAnswer',
                     style: TextStyle(
                       fontFamily: 'Nunito',
                       fontSize: 13,
@@ -409,7 +470,7 @@ class _AnswerFeedbackBar extends StatelessWidget {
               backgroundColor: color,
               minimumSize: const Size(80, 44),
             ),
-            child: const Text(AppStrings.next),
+            child: Text(l10n.nextQuestion),
           ),
         ],
       ),
@@ -432,100 +493,107 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<LessonBloc, LessonState>(
-      builder: (ctx, state) {
-        if (state is! QuizFinished) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(color: AppColors.skyBlue),
-            ),
-          );
-        }
+    return BlocBuilder<LanguageCubit, AppLanguage>(
+      builder: (_, lang) {
+        final l10n = AppLocalizations(lang);
+        return BlocBuilder<LessonBloc, LessonState>(
+          builder: (ctx, state) {
+            if (state is! QuizFinished) {
+              return const Scaffold(
+                body: Center(
+                  child: CircularProgressIndicator(color: AppColors.skyBlue),
+                ),
+              );
+            }
 
-        // Save score once
-        if (!_scoreSaved) {
-          _scoreSaved = true;
-          final authState = ctx.read<AuthBloc>().state;
-          if (authState is AuthAuthenticated) {
-            final scoreToAdd = state.correctCount * 10;
-            AuthRepository().addCompletedLesson(
-              authState.user.uid,
-              state.lesson.id,
-              scoreToAdd,
-            ).then((_) {
-              ctx.read<AuthBloc>().add(AuthUserRefreshed());
-            });
-          }
-        }
+            // Save score once
+            if (!_scoreSaved) {
+              _scoreSaved = true;
+              final authState = ctx.read<AuthBloc>().state;
+              if (authState is AuthAuthenticated) {
+                final scoreToAdd = state.correctCount * 10;
+                AuthRepository().addCompletedLesson(
+                  authState.user.uid,
+                  state.lesson.id,
+                  scoreToAdd,
+                ).then((_) {
+                  ctx.read<AuthBloc>().add(AuthUserRefreshed());
+                });
+              }
+            }
 
-        final emoji =
-            state.grade == '5' || state.grade == '4' ? '🎉' : '📚';
+            final emoji =
+                state.grade == '5' || state.grade == '4' ? '🎉' : '📚';
 
-        return Scaffold(
-          body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(AppDimens.paddingL),
-              child: Column(
-                children: [
-                  const Spacer(),
-                  NerpaMascot(
-                    size: 140,
-                    expression: state.score >= 0.5 ? 'happy' : 'sad',
-                  ),
-                  const SizedBox(height: AppDimens.paddingL),
-                  Text(
-                    '$emoji ${AppStrings.lessonResults}',
-                    style: Theme.of(context).textTheme.displayMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppDimens.paddingXL),
-                  _StatCard(
-                    label: 'Correct answers',
-                    value:
-                        '${state.correctCount} / ${state.totalCount}',
-                  ),
-                  const SizedBox(height: AppDimens.paddingM),
-                  _StatCard(
-                    label: 'Grade',
-                    value: state.grade,
-                    highlight: true,
-                  ),
-                  const SizedBox(height: AppDimens.paddingM),
-                  Row(
+            return Scaffold(
+              body: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppDimens.paddingL),
+                  child: Column(
                     children: [
-                      const Text(
-                        'Lives remaining: ',
-                        style: TextStyle(
-                          fontFamily: 'Nunito',
-                          fontSize: 15,
-                          color: AppColors.textSecondary,
-                        ),
+                      const Spacer(),
+                      NerpaMascot(
+                        size: 140,
+                        expression: state.score >= 0.5 ? 'happy' : 'sad',
                       ),
-                      HeartBar(hearts: state.hearts),
+                      const SizedBox(height: AppDimens.paddingL),
+                      Text(
+                        '$emoji ${l10n.lessonResults}',
+                        style: Theme.of(context).textTheme.displayMedium,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: AppDimens.paddingXL),
+                      _StatCard(
+                        label: l10n.tr(en: 'Correct answers', ru: 'Правильные ответы', kz: 'Дұрыс жауаптар'),
+                        value: '${state.correctCount} / ${state.totalCount}',
+                      ),
+                      const SizedBox(height: AppDimens.paddingM),
+                      _StatCard(
+                        label: l10n.tr(en: 'Grade', ru: 'Оценка', kz: 'Баға'),
+                        value: state.grade,
+                        highlight: true,
+                      ),
+                      const SizedBox(height: AppDimens.paddingM),
+                      Row(
+                        children: [
+                          Text(
+                            l10n.tr(en: 'Lives remaining: ', ru: 'Осталось жизней: ', kz: 'Қалған өмірлер: '),
+                            style: const TextStyle(
+                              fontFamily: 'Nunito',
+                              fontSize: 15,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          HeartBar(hearts: state.hearts),
+                        ],
+                      ),
+                      const Spacer(),
+                      NerpaButton(
+                        label: l10n.tr(en: 'Back to Lessons', ru: 'К урокам', kz: 'Сабақтарға'),
+                        onPressed: () {
+                          ctx.read<LessonBloc>().add(ResetQuiz());
+                          context.go('/home');
+                        },
+                      ),
+                      const SizedBox(height: AppDimens.paddingM),
+                      NerpaButton(
+                        label: l10n.tr(en: 'Try Again', ru: 'Попробовать снова', kz: 'Қайта көру'),
+                        outlined: true,
+                        onPressed: () {
+                          final lessonId = state.lesson.id;
+                          ctx.read<LessonBloc>().add(LoadQuiz(
+                              lessonId: lessonId,
+                              subjectId: widget.subjectId,
+                              langCode: lang.code));
+                          context.pushReplacement('/lesson/${widget.subjectId}/$lessonId');
+                        },
+                      ),
                     ],
                   ),
-                  const Spacer(),
-                  NerpaButton(
-                    label: 'Back to Lessons',
-                    onPressed: () {
-                      ctx.read<LessonBloc>().add(ResetQuiz());
-                      context.go('/home');
-                    },
-                  ),
-                  const SizedBox(height: AppDimens.paddingM),
-                  NerpaButton(
-                    label: 'Try Again',
-                    outlined: true,
-                    onPressed: () {
-                      final lessonId = state.lesson.id;
-                      ctx.read<LessonBloc>().add(LoadQuiz(lessonId: lessonId, subjectId: widget.subjectId));
-                      context.pushReplacement('/lesson/${widget.subjectId}/$lessonId');
-                    },
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
