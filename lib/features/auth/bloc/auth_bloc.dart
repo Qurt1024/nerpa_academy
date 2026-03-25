@@ -60,6 +60,8 @@ class AuthSubjectsUpdateRequested extends AuthEvent {
 
 class AuthSignOutRequested extends AuthEvent {}
 
+class AuthDeleteAccountRequested extends AuthEvent {}
+
 class AuthUserRefreshed extends AuthEvent {}
 
 // ─── States ──────────────────────────────────────────────────────────────────
@@ -110,6 +112,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthGoogleSubjectsSelected>(_onGoogleSubjectsSelected);
     on<AuthSubjectsUpdateRequested>(_onSubjectsUpdate);
     on<AuthSignOutRequested>(_onSignOut);
+    on<AuthDeleteAccountRequested>(_onDeleteAccount);
     on<AuthUserRefreshed>(_onRefresh);
   }
 
@@ -221,5 +224,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onSignOut(AuthSignOutRequested event, Emitter<AuthState> emit) async {
     await _repository.signOut();
     emit(AuthUnauthenticated());
+  }
+
+  Future<void> _onDeleteAccount(
+      AuthDeleteAccountRequested event, Emitter<AuthState> emit) async {
+    final current = state;
+    emit(AuthLoading());
+    try {
+      await _repository.deleteAccount();
+      emit(AuthUnauthenticated());
+    } catch (e) {
+      // Firebase throws requires-recent-login if the session is too old.
+      // Revert to authenticated so the user can sign out/in and retry.
+      if (current is AuthAuthenticated) emit(current);
+      emit(AuthError(e.toString()));
+    }
   }
 }

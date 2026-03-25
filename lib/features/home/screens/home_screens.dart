@@ -60,135 +60,168 @@ class _MainShellState extends State<MainShell> {
 
 // ─── Home Screen ─────────────────────────────────────────────────────────────
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  // Tracks which subject IDs were last loaded. Subject titles resolve
+  // instantly via localTitle() so no reload needed on language change.
+  String? _lastSubjectKey;
+
+  void _load(BuildContext ctx) {
+    final authState = ctx.read<AuthBloc>().state;
+    final user = authState is AuthAuthenticated ? authState.user : null;
+    final langCode = ctx.read<LanguageCubit>().state.code;
+    final subjectKey = user?.selectedSubjectIds.join(',') ?? '';
+
+    _lastSubjectKey = subjectKey;
+
+    ctx.read<LessonBloc>().add(
+          user != null && user.selectedSubjectIds.isNotEmpty
+              ? LoadSubjects(user.selectedSubjectIds, langCode: langCode)
+              : LoadAllSubjects(langCode: langCode),
+        );
+  }
+
+  Future<void> _refresh() async {
+    _load(context);
+    // Wait until loading finishes
+    await context.read<LessonBloc>().stream
+        .firstWhere((s) => s is SubjectsLoaded || s is LessonError);
+  }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<AuthBloc, AuthState>(
       builder: (ctx, authState) {
-        final user =
-            authState is AuthAuthenticated ? authState.user : null;
+        final user = authState is AuthAuthenticated ? authState.user : null;
 
-        return BlocBuilder<LessonBloc, LessonState>(
-          builder: (ctx, state) {
-            // Trigger load only when the bloc is idle
-            if (state is LessonInitial) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                final langCode = ctx.read<LanguageCubit>().state.code;
-                ctx.read<LessonBloc>().add(
-                      user != null && user.selectedSubjectIds.isNotEmpty
-                          ? LoadSubjects(user.selectedSubjectIds, langCode: langCode)
-                          : LoadAllSubjects(langCode: langCode),
-                    );
-              });
-            }
+        return BlocBuilder<LanguageCubit, AppLanguage>(
+          builder: (_, lang) {
+            return BlocBuilder<LessonBloc, LessonState>(
+              builder: (ctx, state) {
+                final subjectKey = user?.selectedSubjectIds.join(',') ?? '';
 
-            if (state is LessonLoading) {
-              return const Scaffold(
-                body: Center(
-                  child: CircularProgressIndicator(color: AppColors.skyBlue),
-                ),
-              );
-            }
+                // Reload only on first load or when subject selection changes.
+                // Language changes do NOT need a reload — subject titles resolve
+                // instantly via localTitle(lang.code) at display time.
+                final needsLoad = state is LessonInitial
+                    || _lastSubjectKey != subjectKey;
 
-            final subjects =
-                state is SubjectsLoaded ? state.subjects : <SubjectModel>[];
+                if (needsLoad && state is! LessonLoading) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) _load(ctx);
+                  });
+                }
 
-            // Wrap in LanguageCubit builder so greeting + labels + cards
-            // all rebuild instantly when the user switches language.
-            return BlocBuilder<LanguageCubit, AppLanguage>(
-              builder: (_, __) {
-                final l10n = context.l10n;
+                if (state is LessonLoading) {
+                  return const Scaffold(
+                    body: Center(
+                      child: CircularProgressIndicator(color: AppColors.skyBlue),
+                    ),
+                  );
+                }
+
+                final subjects =
+                    state is SubjectsLoaded ? state.subjects : <SubjectModel>[];
+                final l10n = AppLocalizations(lang);
+
                 return Scaffold(
                   body: SafeArea(
-                    child: CustomScrollView(
-                      slivers: [
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(
-                              AppDimens.paddingL,
-                              AppDimens.paddingL,
-                              AppDimens.paddingL,
-                              0),
-                          sliver: SliverToBoxAdapter(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            l10n.hiUser(user?.displayName),
-                                            style: Theme.of(ctx)
-                                                .textTheme
-                                                .headlineLarge,
-                                          ),
-                                          const SizedBox(height: AppDimens.paddingXS),
-                                          Text(
-                                            l10n.whatAreWeLearning,
-                                            style: Theme.of(ctx).textTheme.bodyMedium,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const NerpaMascot(size: 72, expression: 'happy'),
-                                  ],
-                                ),
-                                const SizedBox(height: AppDimens.paddingXL),
-                                Text(
-                                  l10n.mySubjects,
-                                  style: Theme.of(ctx).textTheme.headlineMedium,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (subjects.isEmpty && state is! LessonLoading)
-                          SliverFillRemaining(
-                            child: Center(
+                    child: RefreshIndicator(
+                      color: AppColors.skyBlue,
+                      onRefresh: _refresh,
+                      child: CustomScrollView(
+                        slivers: [
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(
+                                AppDimens.paddingL,
+                                AppDimens.paddingL,
+                                AppDimens.paddingL,
+                                0),
+                            sliver: SliverToBoxAdapter(
                               child: Column(
-                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const NerpaMascot(size: 80),
-                                  const SizedBox(height: AppDimens.paddingM),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              l10n.hiUser(user?.displayName),
+                                              style: Theme.of(ctx)
+                                                  .textTheme
+                                                  .headlineLarge,
+                                            ),
+                                            const SizedBox(height: AppDimens.paddingXS),
+                                            Text(
+                                              l10n.whatAreWeLearning,
+                                              style: Theme.of(ctx).textTheme.bodyMedium,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const NerpaMascot(size: 72, expression: 'happy'),
+                                    ],
+                                  ),
+                                  const SizedBox(height: AppDimens.paddingXL),
                                   Text(
-                                    l10n.noSubjectsYet,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontFamily: 'Nunito',
-                                      color: AppColors.textSecondary,
-                                      fontSize: 15,
-                                    ),
+                                    l10n.mySubjects,
+                                    style: Theme.of(ctx).textTheme.headlineMedium,
                                   ),
                                 ],
                               ),
                             ),
-                          )
-                        else
-                          SliverPadding(
-                            padding: const EdgeInsets.all(AppDimens.paddingL),
-                            sliver: SliverList(
-                              delegate: SliverChildBuilderDelegate(
-                                (_, i) => Padding(
-                                  padding: const EdgeInsets.only(
-                                      bottom: AppDimens.paddingM),
-                                  child: SubjectCard(
-                                    emoji: subjects[i].emoji,
-                                    title: subjects[i].localTitle(__.code),
-                                    lessonCount: subjects[i].lessonCount,
-                                    onTap: () => context
-                                        .push('/lessons/${subjects[i].id}'),
-                                  ),
+                          ),
+                          if (subjects.isEmpty && state is! LessonLoading)
+                            SliverFillRemaining(
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const NerpaMascot(size: 80),
+                                    const SizedBox(height: AppDimens.paddingM),
+                                    Text(
+                                      l10n.noSubjectsYet,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontFamily: 'Nunito',
+                                        color: AppColors.textSecondary,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                childCount: subjects.length,
+                              ),
+                            )
+                          else
+                            SliverPadding(
+                              padding: const EdgeInsets.all(AppDimens.paddingL),
+                              sliver: SliverList(
+                                delegate: SliverChildBuilderDelegate(
+                                  (_, i) => Padding(
+                                    padding: const EdgeInsets.only(
+                                        bottom: AppDimens.paddingM),
+                                    child: SubjectCard(
+                                      emoji: subjects[i].emoji,
+                                      title: subjects[i].localTitle(lang.code),
+                                      lessonCount: subjects[i].lessonCount,
+                                      onTap: () => context
+                                          .push('/lessons/${subjects[i].id}'),
+                                    ),
+                                  ),
+                                  childCount: subjects.length,
+                                ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 );
@@ -214,12 +247,16 @@ class LessonsScreen extends StatefulWidget {
 }
 
 class _LessonsScreenState extends State<LessonsScreen> {
+  String? _lastLangCode;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<LessonBloc>().add(LoadLessons(widget.subjectId,
-          langCode: context.read<LanguageCubit>().state.code));
+      final langCode = context.read<LanguageCubit>().state.code;
+      _lastLangCode = langCode;
+      context.read<LessonBloc>().add(
+          LoadLessons(widget.subjectId, langCode: langCode));
     });
   }
 
@@ -228,12 +265,35 @@ class _LessonsScreenState extends State<LessonsScreen> {
     return BlocBuilder<LanguageCubit, AppLanguage>(
       builder: (_, lang) {
         final l10n = AppLocalizations(lang);
+
+        // Reload lessons when language changes so titles update immediately.
+        if (_lastLangCode != null && _lastLangCode != lang.code) {
+          _lastLangCode = lang.code;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              context.read<LessonBloc>().add(
+                  LoadLessons(widget.subjectId, langCode: lang.code));
+            }
+          });
+        }
         return BlocBuilder<LessonBloc, LessonState>(
           builder: (ctx, state) {
+            // If state got reset to LessonInitial while this screen is still
+            // active (e.g. coming back from quiz), re-dispatch LoadLessons.
+            if (state is LessonInitial) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  context.read<LessonBloc>().add(
+                      LoadLessons(widget.subjectId, langCode: lang.code));
+                }
+              });
+            }
+
             if (state is LessonInitial || state is LessonLoading) {
               return Scaffold(
                 appBar: AppBar(
                   leading: BackButton(onPressed: () {
+                    // Reset to LessonInitial so HomeScreen knows to reload
                     ctx.read<LessonBloc>().add(ResetQuiz());
                     context.pop();
                   }),
@@ -264,25 +324,34 @@ class _LessonsScreenState extends State<LessonsScreen> {
                           ),
                         ),
                       )
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(AppDimens.paddingL),
-                        itemCount: state.lessons.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: AppDimens.paddingM),
-                        itemBuilder: (_, i) {
-                          final lesson = state.lessons[i];
-                          return _LessonTile(
-                            number: i + 1,
-                            title: lesson.title,
-                            onTap: () {
-                              ctx.read<LessonBloc>().add(LoadQuiz(
-                                  lessonId: lesson.id,
-                                  subjectId: state.subject.id,
-                                  langCode: lang.code));
-                              context.push('/lesson/${state.subject.id}/${lesson.id}');
-                            },
-                          );
+                    : RefreshIndicator(
+                        color: AppColors.skyBlue,
+                        onRefresh: () async {
+                          ctx.read<LessonBloc>().add(LoadLessons(
+                              widget.subjectId, langCode: lang.code));
+                          await ctx.read<LessonBloc>().stream.firstWhere(
+                              (s) => s is LessonsLoaded || s is LessonError);
                         },
+                        child: ListView.separated(
+                          padding: const EdgeInsets.all(AppDimens.paddingL),
+                          itemCount: state.lessons.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: AppDimens.paddingM),
+                          itemBuilder: (_, i) {
+                            final lesson = state.lessons[i];
+                            return _LessonTile(
+                              number: i + 1,
+                              title: lesson.title,
+                              onTap: () {
+                                ctx.read<LessonBloc>().add(LoadQuiz(
+                                    lessonId: lesson.id,
+                                    subjectId: state.subject.id,
+                                    langCode: lang.code));
+                                context.push('/lesson/${state.subject.id}/${lesson.id}');
+                              },
+                            );
+                          },
+                        ),
                       ),
               );
             }
@@ -306,11 +375,14 @@ class _LessonsScreenState extends State<LessonsScreen> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: AppDimens.paddingL),
-                    ElevatedButton(
-                      onPressed: () => ctx
-                          .read<LessonBloc>()
-                          .add(LoadLessons(widget.subjectId, langCode: lang.code)),
-                      child: Text(l10n.retry),
+                    SizedBox(
+                      width: 180,
+                      child: ElevatedButton(
+                        onPressed: () => ctx
+                            .read<LessonBloc>()
+                            .add(LoadLessons(widget.subjectId, langCode: lang.code)),
+                        child: Text(l10n.retry),
+                      ),
                     ),
                   ],
                 ),

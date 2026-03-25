@@ -150,4 +150,19 @@ class AuthRepository {
     await _googleSignIn.signOut();
     await _auth.signOut();
   }
+
+  /// Permanently deletes the user's Firestore data and Firebase Auth account.
+  /// For email/password users this works directly.
+  /// For Google users the Google token must still be valid (recent sign-in).
+  Future<void> deleteAccount() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    final uid = user.uid;
+    // Delete Firestore document first
+    await _firestore.collection('users').doc(uid).delete();
+    // Delete Firebase Auth account
+    await user.delete();
+    // Sign out of Google session if applicable
+    await _googleSignIn.signOut();
+  }
 }

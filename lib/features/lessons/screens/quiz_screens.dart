@@ -15,11 +15,13 @@ import '../bloc/lesson_bloc.dart';
 class TheoryScreenWidget extends StatelessWidget {
   final LessonModel lesson;
   final List<QuestionModel> questions;
+  final String subjectId;
 
   const TheoryScreenWidget({
     super.key,
     required this.lesson,
     required this.questions,
+    required this.subjectId,
   });
 
   @override
@@ -28,7 +30,12 @@ class TheoryScreenWidget extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(onPressed: () {
-          context.read<LessonBloc>().add(ResetQuiz());
+          // Use the explicitly passed subjectId — lesson.subjectId can be
+          // empty if Firestore omits that field.
+          final langCode = context.read<LanguageCubit>().state.code;
+          context.read<LessonBloc>().add(
+                LoadLessons(subjectId, langCode: langCode),
+              );
           context.pop();
         }),
         title: Text(l10n.tr(en: 'Theory', ru: 'Теория', kz: 'Теория')),
@@ -198,6 +205,7 @@ class _QuizScreenWidgetState extends State<QuizScreenWidget> {
           return TheoryScreenWidget(
             lesson: state.lesson,
             questions: state.questions,
+            subjectId: widget.subjectId,
           );
         }
 
@@ -213,7 +221,10 @@ class _QuizScreenWidgetState extends State<QuizScreenWidget> {
           return Scaffold(
             appBar: AppBar(
               leading: BackButton(onPressed: () {
-                ctx.read<LessonBloc>().add(ResetQuiz());
+                final langCode = context.read<LanguageCubit>().state.code;
+                context.read<LessonBloc>().add(
+                      LoadLessons(widget.subjectId, langCode: langCode),
+                    );
                 context.pop();
               }),
             ),
@@ -230,7 +241,12 @@ class _QuizScreenWidgetState extends State<QuizScreenWidget> {
         return Scaffold(
           appBar: AppBar(
             leading: BackButton(onPressed: () {
-              ctx.read<LessonBloc>().add(ResetQuiz());
+              // Use widget.subjectId (from route params) — state.lesson.subjectId
+              // can be empty if Firestore omits that field.
+              final langCode = context.read<LanguageCubit>().state.code;
+              context.read<LessonBloc>().add(
+                    LoadLessons(widget.subjectId, langCode: langCode),
+                  );
               context.pop();
             }),
             title: Row(

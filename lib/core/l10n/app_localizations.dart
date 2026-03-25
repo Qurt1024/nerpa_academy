@@ -92,6 +92,18 @@ class AppLocalizations {
   String get appLanguageLabel => _s(en: 'App Language', ru: 'Язык приложения', kz: 'Қолданба тілі');
   String get signOut => _s(en: 'Sign Out', ru: 'Выйти', kz: 'Шығу');
   String get editSubjects => _s(en: 'Edit Subjects', ru: 'Изменить предметы', kz: 'Пәндерді өзгерту');
+  String get deleteAccount => _s(en: 'Delete Account', ru: 'Удалить аккаунт', kz: 'Аккаунтты жою');
+  String get deleteAccountConfirmTitle => _s(en: 'Delete Account?', ru: 'Удалить аккаунт?', kz: 'Аккаунтты жоясыз ба?');
+  String get deleteAccountConfirmBody => _s(
+    en: 'This will permanently delete your account, progress, and all data. This cannot be undone.',
+    ru: 'Это навсегда удалит ваш аккаунт, прогресс и все данные. Это действие нельзя отменить.',
+    kz: 'Бұл сіздің аккаунтыңызды, прогресіңізді және барлық деректеріңізді біржола жояды. Бұл әрекетті болдырмау мүмкін емес.',
+  );
+  String get deleteAccountError => _s(
+    en: 'Could not delete account. Please sign out and sign in again, then try again.',
+    ru: 'Не удалось удалить аккаунт. Выйдите и войдите снова, затем попробуйте ещё раз.',
+    kz: 'Аккаунтты жою мүмкін болмады. Шығып, қайта кіріңіз де, қайта көріңіз.',
+  );
   String get typeMessage => _s(en: 'Type a message...', ru: 'Сообщение...', kz: 'Хабарлама жазыңыз...');
   String get send => _s(en: 'Send', ru: 'Отправить', kz: 'Жіберу');
   String get invalidEmail => _s(en: 'Please enter a valid email', ru: 'Введите корректный email', kz: 'Дұрыс email енгізіңіз');

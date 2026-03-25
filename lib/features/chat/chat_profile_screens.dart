@@ -261,84 +261,162 @@ class _ChatInput extends StatelessWidget {
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
+  Future<void> _confirmDelete(BuildContext context) async {
+    final l10n = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimens.radiusXL)),
+        title: Text(l10n.deleteAccountConfirmTitle,
+            style: const TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w800)),
+        content: Text(l10n.deleteAccountConfirmBody,
+            style: const TextStyle(fontFamily: 'Nunito')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(false),
+            child: Text(l10n.tr(en: 'Cancel', ru: 'Отмена', kz: 'Болдырмау'),
+                style: const TextStyle(
+                    fontFamily: 'Nunito', color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
+            child: Text(l10n.deleteAccount,
+                style: const TextStyle(
+                    fontFamily: 'Nunito',
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      context.read<AuthBloc>().add(AuthDeleteAccountRequested());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return BlocBuilder<AuthBloc, AuthState>(
-      builder: (ctx, state) {
-        final user = state is AuthAuthenticated ? state.user : null;
+    return BlocBuilder<LanguageCubit, AppLanguage>(
+      builder: (_, __) {
+        // Re-read l10n inside the BlocBuilder so every language change
+        // triggers a full rebuild of all profile-screen labels.
+        final l10n = context.l10n;
+        return BlocListener<AuthBloc, AuthState>(
+          listener: (ctx, state) {
+            if (state is AuthUnauthenticated) {
+              context.go('/');
+            } else if (state is AuthError) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(l10n.deleteAccountError),
+                backgroundColor: AppColors.error,
+              ));
+            }
+          },
+          child: BlocBuilder<AuthBloc, AuthState>(
+            builder: (ctx, state) {
+              final user = state is AuthAuthenticated ? state.user : null;
+              final isLoading = state is AuthLoading;
 
-        return Scaffold(
-          appBar: AppBar(title: Text(l10n.profile)),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppDimens.paddingL),
-            child: Column(
-              children: [
-                const SizedBox(height: AppDimens.paddingM),
-                const NerpaMascot(size: 100),
-                const SizedBox(height: AppDimens.paddingM),
-                Text(
-                  user?.displayName ?? user?.email ?? 'Player',
-                  style: Theme.of(context).textTheme.headlineLarge,
-                  textAlign: TextAlign.center,
-                ),
-                if (user?.email != null) ...[
-                  const SizedBox(height: AppDimens.paddingXS),
-                  Text(user!.email, style: Theme.of(context).textTheme.bodyMedium),
-                ],
-                const SizedBox(height: AppDimens.paddingXL),
-
-                // ── Stats tiles ──────────────────────────────────────────────
-                _ProfileTile(
-                  icon: Icons.star_rounded,
-                  label: l10n.totalScore,
-                  value: '${user?.totalScore ?? 0}',
-                ),
-                const SizedBox(height: AppDimens.paddingM),
-                _ProfileTile(
-                  icon: Icons.menu_book_rounded,
-                  label: l10n.subjectsSelected,
-                  value: '${user?.selectedSubjectIds.length ?? 0}',
-                ),
-                const SizedBox(height: AppDimens.paddingM),
-                _ProfileTile(
-                  icon: Icons.check_circle_rounded,
-                  label: l10n.completedLessonsLabel,
-                  value: '${user?.completedLessons.length ?? 0}',
-                ),
-                const SizedBox(height: AppDimens.paddingXL),
-
-                // ── Language picker ──────────────────────────────────────────
-                _LanguagePicker(),
-                const SizedBox(height: AppDimens.paddingM),
-
-                // ── Edit subjects ────────────────────────────────────────────
-                if (user != null)
-                  NerpaButton(
-                    label: l10n.editSubjects,
-                    icon: Icons.menu_book_rounded,
-                    outlined: true,
-                    onPressed: () => _showEditSubjectsSheet(context, user),
+          return Scaffold(
+            appBar: AppBar(title: Text(l10n.profile)),
+            body: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppDimens.paddingL),
+              child: Column(
+                children: [
+                  const SizedBox(height: AppDimens.paddingM),
+                  const NerpaMascot(size: 100),
+                  const SizedBox(height: AppDimens.paddingM),
+                  Text(
+                    user?.displayName ?? user?.email ?? 'Player',
+                    style: Theme.of(context).textTheme.headlineLarge,
+                    textAlign: TextAlign.center,
                   ),
-                const SizedBox(height: AppDimens.paddingM),
+                  if (user?.email != null) ...[
+                    const SizedBox(height: AppDimens.paddingXS),
+                    Text(user!.email, style: Theme.of(context).textTheme.bodyMedium),
+                  ],
+                  const SizedBox(height: AppDimens.paddingXL),
 
-                // ── Sign out ─────────────────────────────────────────────────
-                NerpaButton(
-                  label: l10n.signOut,
-                  outlined: true,
-                  icon: Icons.logout_rounded,
-                  onPressed: () {
-                    ctx.read<AuthBloc>().add(AuthSignOutRequested());
-                    context.go('/');
-                  },
-                ),
-                const SizedBox(height: AppDimens.paddingL),
-              ],
+                  // ── Stats tiles ──────────────────────────────────────────────
+                  _ProfileTile(
+                    icon: Icons.star_rounded,
+                    label: l10n.totalScore,
+                    value: '${user?.totalScore ?? 0}',
+                  ),
+                  const SizedBox(height: AppDimens.paddingM),
+                  _ProfileTile(
+                    icon: Icons.menu_book_rounded,
+                    label: l10n.subjectsSelected,
+                    value: '${user?.selectedSubjectIds.length ?? 0}',
+                  ),
+                  const SizedBox(height: AppDimens.paddingM),
+                  _ProfileTile(
+                    icon: Icons.check_circle_rounded,
+                    label: l10n.completedLessonsLabel,
+                    value: '${user?.completedLessons.length ?? 0}',
+                  ),
+                  const SizedBox(height: AppDimens.paddingXL),
+
+                  // ── Language picker ──────────────────────────────────────────
+                  _LanguagePicker(),
+                  const SizedBox(height: AppDimens.paddingM),
+
+                  // ── Edit subjects ────────────────────────────────────────────
+                  if (user != null)
+                    NerpaButton(
+                      label: l10n.editSubjects,
+                      icon: Icons.menu_book_rounded,
+                      outlined: true,
+                      onPressed: isLoading
+                          ? null
+                          : () => _showEditSubjectsSheet(context, user),
+                    ),
+                  const SizedBox(height: AppDimens.paddingM),
+
+                  // ── Sign out ─────────────────────────────────────────────────
+                  NerpaButton(
+                    label: l10n.signOut,
+                    outlined: true,
+                    icon: Icons.logout_rounded,
+                    onPressed: isLoading
+                        ? null
+                        : () {
+                            ctx.read<AuthBloc>().add(AuthSignOutRequested());
+                            context.go('/');
+                          },
+                  ),
+                  const SizedBox(height: AppDimens.paddingM),
+
+                  // ── Delete account ───────────────────────────────────────────
+                  if (user != null)
+                    Theme(
+                      data: Theme.of(context).copyWith(
+                        outlinedButtonTheme: OutlinedButtonThemeData(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.error,
+                            side: const BorderSide(color: AppColors.error),
+                          ),
+                        ),
+                      ),
+                      child: NerpaButton(
+                        label: l10n.deleteAccount,
+                        icon: Icons.delete_forever_rounded,
+                        outlined: true,
+                        loading: isLoading,
+                        onPressed: isLoading ? null : () => _confirmDelete(context),
+                      ),
+                    ),
+                  const SizedBox(height: AppDimens.paddingXL),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
+    },
+  );
   }
 }
 
