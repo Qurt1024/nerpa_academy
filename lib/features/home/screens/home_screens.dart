@@ -117,7 +117,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   });
                 }
 
-                if (state is LessonLoading) {
+                // Treat LessonInitial as loading so HomeScreen shows a spinner
+                // (not an empty subjects list) while the reload triggered by
+                // addPostFrameCallback is in flight.  This prevents the "no
+                // subjects selected" flash that appeared after pressing the
+                // back button on the LessonsScreen.
+                if (state is LessonInitial || state is LessonLoading) {
                   return const Scaffold(
                     body: Center(
                       child: CircularProgressIndicator(color: AppColors.skyBlue),
@@ -248,6 +253,13 @@ class LessonsScreen extends StatefulWidget {
 
 class _LessonsScreenState extends State<LessonsScreen> {
   String? _lastLangCode;
+  bool _isNavigatingBack = false;
+
+  void _onBack(BuildContext ctx) {
+    setState(() => _isNavigatingBack = true);
+    ctx.read<LessonBloc>().add(ResetQuiz());
+    context.pop();
+  }
 
   @override
   void initState() {
@@ -280,7 +292,9 @@ class _LessonsScreenState extends State<LessonsScreen> {
           builder: (ctx, state) {
             // If state got reset to LessonInitial while this screen is still
             // active (e.g. coming back from quiz), re-dispatch LoadLessons.
-            if (state is LessonInitial) {
+            // Guard: skip when navigating back so we don't overwrite the
+            // LoadSubjects that HomeScreen is about to dispatch.
+            if (state is LessonInitial && !_isNavigatingBack) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) {
                   context.read<LessonBloc>().add(
@@ -292,11 +306,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
             if (state is LessonInitial || state is LessonLoading) {
               return Scaffold(
                 appBar: AppBar(
-                  leading: BackButton(onPressed: () {
-                    // Reset to LessonInitial so HomeScreen knows to reload
-                    ctx.read<LessonBloc>().add(ResetQuiz());
-                    context.pop();
-                  }),
+                  leading: BackButton(onPressed: () => _onBack(ctx)),
                   title: Text(l10n.lessons),
                 ),
                 body: const Center(
@@ -308,10 +318,7 @@ class _LessonsScreenState extends State<LessonsScreen> {
             if (state is LessonsLoaded) {
               return Scaffold(
                 appBar: AppBar(
-                  leading: BackButton(onPressed: () {
-                    ctx.read<LessonBloc>().add(ResetQuiz());
-                    context.pop();
-                  }),
+                  leading: BackButton(onPressed: () => _onBack(ctx)),
                   title: Text(state.subject.localTitle(lang.code)),
                 ),
                 body: state.lessons.isEmpty

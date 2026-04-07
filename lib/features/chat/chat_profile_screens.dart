@@ -65,8 +65,8 @@ class _ChatScreenState extends State<ChatScreen> {
           SnackBar(
             content: Text(
               e.toString().contains('flagged')
-                  ? '⚠️ Message blocked by moderation.'
-                  : 'Failed to send message.',
+                  ? context.l10n.tr(en: '⚠️ Message blocked by moderation.', ru: '⚠️ Сообщение заблокировано модерацией.', kz: '⚠️ Хабарлама модерациямен бұғатталды.')
+                  : context.l10n.tr(en: 'Failed to send message.', ru: 'Не удалось отправить сообщение.', kz: 'Хабарламаны жіберу мүмкін болмады.'),
             ),
             backgroundColor: AppColors.error,
           ),
@@ -77,13 +77,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AuthBloc, AuthState>(
+    return BlocBuilder<LanguageCubit, AppLanguage>(
+      builder: (_, __) => BlocBuilder<AuthBloc, AuthState>(
       builder: (ctx, authState) {
         final user = authState is AuthAuthenticated ? authState.user : null;
 
+        final l10n = context.l10n;
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Room Chat'),
+            title: Text(l10n.tr(en: 'Room Chat', ru: 'Чат комнаты', kz: 'Бөлме чаты')),
             leading: BackButton(onPressed: () => context.pop()),
           ),
           body: Column(
@@ -100,11 +102,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
                     final messages = snap.data ?? [];
                     if (messages.isEmpty) {
-                      return const Center(
+                      return Center(
                         child: Text(
-                          'No messages yet.\nSay hi! 👋',
+                          l10n.tr(
+                            en: 'No messages yet.\nSay hi! 👋',
+                            ru: 'Сообщений пока нет.\nПоздоровайся! 👋',
+                            kz: 'Хабарламалар жоқ.\nСәлем де! 👋',
+                          ),
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontFamily: 'Nunito',
                             color: AppColors.textSecondary,
                           ),
@@ -135,7 +141,8 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         );
       },
-    );
+    ), // end BlocBuilder<AuthBloc>
+    ); // end BlocBuilder<LanguageCubit>
   }
 }
 

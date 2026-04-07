@@ -72,7 +72,7 @@ class AppLocalizations {
   }
   String get whatAreWeLearning => _s(en: 'What are we learning today?', ru: 'Что учим сегодня?', kz: 'Бүгін не оқимыз?');
   String get noSubjectsYet => _s(en: 'No subjects yet.\nCheck your profile!', ru: 'Предметы не выбраны.\nПроверьте профиль!', kz: 'Пәндер жоқ.\nПрофильді тексеріңіз!');
-  String get startLesson => _s(en: 'Start Lesson', ru: 'Начать урок', kz: 'Сабақты бастау');
+  String get startLesson => _s(en: 'Start Test', ru: 'Начать тест', kz: 'Тестті бастау');
   String get nextQuestion => _s(en: 'Next', ru: 'Далее', kz: 'Келесі');
   String get yourAnswer => _s(en: 'Type your answer...', ru: 'Введите ответ...', kz: 'Жауапты жазыңыз...');
   String get lessonResults => _s(en: 'Lesson Results', ru: 'Результаты урока', kz: 'Сабақ нәтижелері');

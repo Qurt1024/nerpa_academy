@@ -90,15 +90,17 @@ class RoomPlaying extends RoomState {
   final int currentIndex;
   final bool answered;
   final int timeLeft;
+  final String? selectedAnswer; // tracks what the local player submitted
   RoomPlaying({
     required this.room,
     required this.questions,
     required this.currentIndex,
     required this.answered,
     required this.timeLeft,
+    this.selectedAnswer,
   });
   @override
-  List<Object?> get props => [room, questions, currentIndex, answered, timeLeft];
+  List<Object?> get props => [room, questions, currentIndex, answered, timeLeft, selectedAnswer];
 }
 
 class RoomFinished extends RoomState {
@@ -233,6 +235,7 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
       currentIndex: s.currentIndex,
       answered: true,
       timeLeft: s.timeLeft,
+      selectedAnswer: event.answer,
     ));
   }
 
@@ -293,12 +296,20 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
           prevState.currentIndex == safeIndex &&
           prevState.answered;
 
+      // Preserve the player's submitted answer for the same question so the
+      // UI can keep showing answer-colour feedback; clear it on question change.
+      final prevSelectedAnswer = (prevState is RoomPlaying &&
+              prevState.currentIndex == safeIndex)
+          ? prevState.selectedAnswer
+          : null;
+
       emit(RoomPlaying(
         room: room,
         questions: _questions,
         currentIndex: safeIndex,
         answered: alreadyAnswered,
         timeLeft: _timeLeft,
+        selectedAnswer: prevSelectedAnswer,
       ));
     } else if (room.status == RoomStatus.finished) {
       _timer?.cancel();
@@ -515,44 +526,57 @@ class _CreateRoomDialogState extends State<_CreateRoomDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimens.radiusXL)),
-      title: Text(
-        _selectedSubject == null ? 'Choose a subject' : 'Choose a lesson',
-        style: const TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w800),
-      ),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: _loadingSubjects
-            ? const Center(child: CircularProgressIndicator(color: AppColors.skyBlue))
-            : _selectedSubject == null ? _buildSubjectList() : _buildLessonList(),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            if (_selectedSubject != null) {
-              setState(() { _selectedSubject = null; _selectedLesson = null; _lessons = []; });
-            } else { Navigator.of(context).pop(); }
-          },
-          child: Text(_selectedSubject != null ? 'Back' : 'Cancel',
-              style: const TextStyle(fontFamily: 'Nunito', color: AppColors.textSecondary)),
-        ),
-        if (_selectedLesson != null)
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimens.radiusRound))),
-            onPressed: () {
-              Navigator.of(context).pop();
-              widget.onConfirm(_selectedSubject!.id, _selectedLesson!.id);
-            },
-            child: const Text('Create', style: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w700)),
+    return BlocBuilder<LanguageCubit, AppLanguage>(
+      builder: (_, __) {
+        final l10n = context.l10n;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimens.radiusXL)),
+          title: Text(
+            _selectedSubject == null
+                ? l10n.tr(en: 'Choose a subject', ru: 'Выберите предмет', kz: 'Пән таңдаңыз')
+                : l10n.tr(en: 'Choose a lesson', ru: 'Выберите урок', kz: 'Сабақ таңдаңыз'),
+            style: const TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w800),
           ),
-      ],
+          content: SizedBox(
+            width: double.maxFinite,
+            child: _loadingSubjects
+                ? const Center(child: CircularProgressIndicator(color: AppColors.skyBlue))
+                : _selectedSubject == null ? _buildSubjectList() : _buildLessonList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                if (_selectedSubject != null) {
+                  setState(() { _selectedSubject = null; _selectedLesson = null; _lessons = []; });
+                } else { Navigator.of(context).pop(); }
+              },
+              child: Text(
+                _selectedSubject != null ? l10n.back : l10n.tr(en: 'Cancel', ru: 'Отмена', kz: 'Болдырмау'),
+                style: const TextStyle(fontFamily: 'Nunito', color: AppColors.textSecondary),
+              ),
+            ),
+            if (_selectedLesson != null)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimens.radiusRound))),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  widget.onConfirm(_selectedSubject!.id, _selectedLesson!.id);
+                },
+                child: Text(
+                  l10n.tr(en: 'Create', ru: 'Создать', kz: 'Жасау'),
+                  style: const TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w700),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
   Widget _buildSubjectList() {
-    if (_subjects.isEmpty) return const Text('No subjects found.', style: TextStyle(fontFamily: 'Nunito'));
+    final l10n = context.l10n;
+    if (_subjects.isEmpty) return Text(l10n.tr(en: 'No subjects found.', ru: 'Предметы не найдены.', kz: 'Пәндер табылмады.'), style: const TextStyle(fontFamily: 'Nunito'));
     final langCode = context.read<LanguageCubit>().state.code;
     return ListView.separated(
       shrinkWrap: true,
@@ -576,7 +600,8 @@ class _CreateRoomDialogState extends State<_CreateRoomDialog> {
 
   Widget _buildLessonList() {
     if (_loadingLessons) return const Center(child: CircularProgressIndicator(color: AppColors.skyBlue));
-    if (_lessons.isEmpty) return const Text('No lessons yet.', style: TextStyle(fontFamily: 'Nunito'));
+    final l10n = context.l10n;
+    if (_lessons.isEmpty) return Text(l10n.noLessonsAvailable, style: const TextStyle(fontFamily: 'Nunito'));
     return ListView.separated(
       shrinkWrap: true,
       itemCount: _lessons.length,
@@ -630,41 +655,46 @@ class _QuickMatchDialogState extends State<_QuickMatchDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimens.radiusXL)),
-      title: Text(context.l10n.tr(en: 'Quick Match', ru: 'Быстрый матч', kz: 'Жылдам ойын'), style: const TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w800)),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: _loading
-            ? const Center(child: CircularProgressIndicator(color: AppColors.skyBlue))
-            : _subjects.isEmpty
-                ? const Text('No subjects found.', style: TextStyle(fontFamily: 'Nunito'))
-                : ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: _subjects.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: AppDimens.paddingS),
-                    itemBuilder: (_, i) {
-                      final s = _subjects[i];
-                      final langCode = context.read<LanguageCubit>().state.code;
-                      return ListTile(
-                        leading: Text(s.emoji, style: const TextStyle(fontSize: 24)),
-                        title: Text(s.localTitle(langCode), style: const TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w700)),
-                        trailing: const Icon(Icons.bolt_rounded, color: AppColors.skyBlue),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppDimens.radiusM),
-                          side: const BorderSide(color: AppColors.cardBorder),
-                        ),
-                        onTap: () { Navigator.of(context).pop(); widget.onConfirm(s.id); },
-                      );
-                    },
-                  ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel', style: TextStyle(fontFamily: 'Nunito', color: AppColors.textSecondary)),
-        ),
-      ],
+    return BlocBuilder<LanguageCubit, AppLanguage>(
+      builder: (_, __) {
+        final l10n = context.l10n;
+        final langCode = context.read<LanguageCubit>().state.code;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimens.radiusXL)),
+          title: Text(l10n.tr(en: 'Quick Match', ru: 'Быстрый матч', kz: 'Жылдам ойын'), style: const TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w800)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: _loading
+                ? const Center(child: CircularProgressIndicator(color: AppColors.skyBlue))
+                : _subjects.isEmpty
+                    ? Text(l10n.tr(en: 'No subjects found.', ru: 'Предметы не найдены.', kz: 'Пәндер табылмады.'), style: const TextStyle(fontFamily: 'Nunito'))
+                    : ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: _subjects.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: AppDimens.paddingS),
+                        itemBuilder: (_, i) {
+                          final s = _subjects[i];
+                          return ListTile(
+                            leading: Text(s.emoji, style: const TextStyle(fontSize: 24)),
+                            title: Text(s.localTitle(langCode), style: const TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w700)),
+                            trailing: const Icon(Icons.bolt_rounded, color: AppColors.skyBlue),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppDimens.radiusM),
+                              side: const BorderSide(color: AppColors.cardBorder),
+                            ),
+                            onTap: () { Navigator.of(context).pop(); widget.onConfirm(s.id); },
+                          );
+                        },
+                      ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(l10n.tr(en: 'Cancel', ru: 'Отмена', kz: 'Болдырмау'), style: const TextStyle(fontFamily: 'Nunito', color: AppColors.textSecondary)),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -936,9 +966,17 @@ class _GameScreenState extends State<GameScreen> {
                           ),
                         )
                       else
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: AppDimens.paddingM),
-                          child: NerpaMascot(size: 80),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
+                          child: NerpaMascot(
+                            size: 100,
+                            expression: !state.answered
+                                ? 'default'
+                                : (state.selectedAnswer != null &&
+                                        q.checkAnswer(state.selectedAnswer!))
+                                    ? 'happy'
+                                    : 'sad',
+                          ),
                         ),
                       // ── Question card ────────────────────────────────────
                       Container(
@@ -953,69 +991,226 @@ class _GameScreenState extends State<GameScreen> {
                             style: Theme.of(context).textTheme.headlineMedium,
                             textAlign: TextAlign.center),
                       ),
-                      const SizedBox(height: AppDimens.paddingL),
+                      const SizedBox(height: AppDimens.paddingXL),
 
-                      if (!state.answered) ...[
-                        if (isFreeInput) ...[
-                          // ── Free text input ──────────────────────────────
-                          TextField(
-                            controller: _inputCtrl,
-                            autofocus: false,
-                            decoration: InputDecoration(
-                              hintText: context.l10n.yourAnswer,
-                              suffixIcon: IconButton(
-                                icon: const Icon(Icons.send_rounded, color: AppColors.skyBlue),
-                                onPressed: () {
-                                  final ans = _inputCtrl.text.trim();
-                                  if (ans.isEmpty) return;
-                                  ctx.read<RoomBloc>().add(AnswerGameQuestion(answer: ans, answeredAt: DateTime.now()));
-                                },
+                      if (isFreeInput) ...[
+                        // ── Free text input ──────────────────────────────
+                        TextField(
+                          controller: _inputCtrl,
+                          enabled: !state.answered,
+                          autofocus: false,
+                          decoration: InputDecoration(
+                            hintText: context.l10n.yourAnswer,
+                            suffixIcon: state.answered
+                                ? null
+                                : IconButton(
+                                    icon: const Icon(Icons.send_rounded, color: AppColors.skyBlue),
+                                    onPressed: () {
+                                      final ans = _inputCtrl.text.trim();
+                                      if (ans.isEmpty) return;
+                                      ctx.read<RoomBloc>().add(AnswerGameQuestion(answer: ans, answeredAt: DateTime.now()));
+                                    },
+                                  ),
+                          ),
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (ans) {
+                            if (ans.trim().isEmpty || state.answered) return;
+                            ctx.read<RoomBloc>().add(AnswerGameQuestion(answer: ans.trim(), answeredAt: DateTime.now()));
+                          },
+                        ),
+                      ] else ...[
+                        // ── Multiple choice — styled like singleplayer ───
+                        ...q.options.map((opt) {
+                          Color bgColor = AppColors.white;
+                          Color borderColor = AppColors.cardBorder;
+                          Color textColor = AppColors.textPrimary;
+
+                          if (state.answered && state.selectedAnswer != null) {
+                            final isCorrectOpt = q.checkAnswer(opt);
+                            final isSelected = state.selectedAnswer == opt;
+                            if (isCorrectOpt) {
+                              bgColor = AppColors.answerCorrect.withOpacity(0.15);
+                              borderColor = AppColors.answerCorrect;
+                              textColor = AppColors.answerCorrect;
+                            } else if (isSelected) {
+                              bgColor = AppColors.answerWrong.withOpacity(0.1);
+                              borderColor = AppColors.answerWrong;
+                              textColor = AppColors.answerWrong;
+                            }
+                          }
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
+                            child: AnimatedContainer(
+                              duration: AppDimens.animNormal,
+                              child: Material(
+                                color: bgColor,
+                                borderRadius: BorderRadius.circular(AppDimens.radiusL),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(AppDimens.radiusL),
+                                  onTap: state.answered
+                                      ? null
+                                      : () => ctx.read<RoomBloc>().add(
+                                          AnswerGameQuestion(answer: opt, answeredAt: DateTime.now())),
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppDimens.paddingL,
+                                      vertical: AppDimens.paddingM + 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(AppDimens.radiusL),
+                                      border: Border.all(color: borderColor, width: 2),
+                                    ),
+                                    child: Text(
+                                      opt,
+                                      style: TextStyle(
+                                        fontFamily: 'Nunito',
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: textColor,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                            textInputAction: TextInputAction.send,
-                            onSubmitted: (ans) {
-                              if (ans.trim().isEmpty) return;
-                              ctx.read<RoomBloc>().add(AnswerGameQuestion(answer: ans.trim(), answeredAt: DateTime.now()));
-                            },
-                          ),
-                        ] else ...[
-                          // ── Multiple choice ──────────────────────────────
-                          ...q.options.map((opt) => Padding(
-                                padding: const EdgeInsets.only(bottom: AppDimens.paddingM),
-                                child: NerpaButton(
-                                  label: opt,
-                                  onPressed: () => ctx.read<RoomBloc>().add(
-                                      AnswerGameQuestion(answer: opt, answeredAt: DateTime.now())),
-                                ),
-                              )),
-                        ],
-                      ] else ...[
-                        // ── Already answered ─────────────────────────────
-                        const Icon(Icons.check_circle_rounded, color: AppColors.answerCorrect, size: 64),
-                        const SizedBox(height: 8),
-                        Text(
-                          context.l10n.tr(en: 'Answer submitted! Waiting for others...', ru: 'Ответ отправлен! Ждём остальных...', kz: 'Жауап жіберілді! Басқаларды күтеміз...'),
-                          style: const TextStyle(fontFamily: 'Nunito', fontSize: 16, color: AppColors.textSecondary),
-                          textAlign: TextAlign.center,
-                        ),
-                        if (isHost) ...[
-                          const SizedBox(height: AppDimens.paddingL),
-                          NerpaButton(
-                            label: context.l10n.tr(en: 'Next Question →', ru: 'Следующий вопрос →', kz: 'Келесі сұрақ →'),
-                            onPressed: () => ctx.read<RoomBloc>().add(AdvanceToNextQuestion()),
-                          ),
-                        ],
+                          );
+                        }),
                       ],
                     ],
                   ),
                 ),
               ),
+              // ── Answer feedback bar (mirrors singleplayer) ───────────
+              if (state.answered)
+                _MultiplayerFeedbackBar(
+                  isCorrect: state.selectedAnswer != null &&
+                      q.checkAnswer(state.selectedAnswer!),
+                  correctAnswer: q.correctAnswer,
+                  isHost: isHost,
+                  onNext: () => ctx.read<RoomBloc>().add(AdvanceToNextQuestion()),
+                ),
             ],
           ),
         );
       },
     ), // end BlocConsumer<RoomBloc>
     ); // end BlocBuilder<LanguageCubit>
+  }
+}
+
+
+// ─── Multiplayer Answer Feedback Bar ─────────────────────────────────────────
+// Mirrors the singleplayer _AnswerFeedbackBar; host gets a "Next Question"
+// button while guests see a "waiting" message.
+
+class _MultiplayerFeedbackBar extends StatelessWidget {
+  final bool isCorrect;
+  final String correctAnswer;
+  final bool isHost;
+  final VoidCallback onNext;
+
+  const _MultiplayerFeedbackBar({
+    required this.isCorrect,
+    required this.correctAnswer,
+    required this.isHost,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final color = isCorrect ? AppColors.answerCorrect : AppColors.answerWrong;
+    return AnimatedContainer(
+      duration: AppDimens.animNormal,
+      padding: const EdgeInsets.fromLTRB(
+        AppDimens.paddingL,
+        AppDimens.paddingM,
+        AppDimens.paddingL,
+        AppDimens.paddingXL,
+      ),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        border: Border(top: BorderSide(color: color, width: 2)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isCorrect ? Icons.check_circle_rounded : Icons.cancel_rounded,
+            color: color,
+            size: 28,
+          ),
+          const SizedBox(width: AppDimens.paddingM),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  isCorrect ? l10n.correct : l10n.incorrect,
+                  style: TextStyle(
+                    fontFamily: 'Nunito',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    color: color,
+                  ),
+                ),
+                if (!isCorrect)
+                  Text(
+                    '${l10n.tr(en: "Correct answer", ru: "Правильный ответ", kz: "Дұрыс жауап")}: $correctAnswer',
+                    style: TextStyle(fontFamily: 'Nunito', fontSize: 13, color: color),
+                  ),
+                if (isCorrect && !isHost)
+                  Text(
+                    l10n.tr(
+                      en: 'Waiting for others...',
+                      ru: 'Ждём остальных...',
+                      kz: 'Басқаларды күтеміз...',
+                    ),
+                    style: const TextStyle(
+                      fontFamily: 'Nunito', fontSize: 13, color: AppColors.textSecondary,
+                    ),
+                  ),
+                if (!isCorrect && !isHost)
+                  Text(
+                    l10n.tr(
+                      en: 'Waiting for others...',
+                      ru: 'Ждём остальных...',
+                      kz: 'Басқаларды күтеміз...',
+                    ),
+                    style: const TextStyle(
+                      fontFamily: 'Nunito', fontSize: 13, color: AppColors.textSecondary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (isHost)
+            ElevatedButton(
+              onPressed: onNext,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color,
+                minimumSize: const Size(80, 44),
+              ),
+              child: Text(
+                l10n.tr(en: 'Next →', ru: 'Далее →', kz: 'Келесі →'),
+                style: const TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w700),
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(AppDimens.radiusRound),
+              ),
+              child: Icon(Icons.hourglass_top_rounded, color: color, size: 20),
+            ),
+        ],
+      ),
+    );
   }
 }
 
