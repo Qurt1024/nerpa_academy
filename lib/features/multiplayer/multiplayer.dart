@@ -958,8 +958,21 @@ class _GameScreenState extends State<GameScreen> {
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(AppDimens.paddingL),
-                  child: Column(
-                    children: [
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 350),
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween(
+                          begin: const Offset(0.08, 0),
+                          end: Offset.zero,
+                        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+                        child: child,
+                      ),
+                    ),
+                    child: Column(
+                      key: ValueKey(state.currentIndex),
+                      children: [
                       // ── Question image (nerpa mascot as fallback) ────────
                       if (q.imageUrl != null && q.imageUrl!.isNotEmpty)
                         Padding(
@@ -1108,16 +1121,29 @@ class _GameScreenState extends State<GameScreen> {
                     ],
                   ),
                 ),
+                ), // AnimatedSwitcher
               ),
               // ── Answer feedback bar (mirrors singleplayer) ───────────
-              if (state.answered)
-                _MultiplayerFeedbackBar(
-                  isCorrect: state.selectedAnswer != null &&
-                      q.checkAnswer(state.selectedAnswer!),
-                  correctAnswer: q.correctAnswer,
-                  isHost: isHost,
-                  onNext: () => ctx.read<RoomBloc>().add(AdvanceToNextQuestion()),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (child, animation) => SlideTransition(
+                  position: Tween(
+                    begin: const Offset(0, 1),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+                  child: FadeTransition(opacity: animation, child: child),
                 ),
+                child: state.answered
+                    ? _MultiplayerFeedbackBar(
+                        key: const ValueKey('feedback'),
+                        isCorrect: state.selectedAnswer != null &&
+                            q.checkAnswer(state.selectedAnswer!),
+                        correctAnswer: q.correctAnswer,
+                        isHost: isHost,
+                        onNext: () => ctx.read<RoomBloc>().add(AdvanceToNextQuestion()),
+                      )
+                    : const SizedBox.shrink(key: ValueKey('empty')),
+              ),
             ],
           ),
         );
@@ -1132,13 +1158,14 @@ class _GameScreenState extends State<GameScreen> {
 // Mirrors the singleplayer _AnswerFeedbackBar; host gets a "Next Question"
 // button while guests see a "waiting" message.
 
-class _MultiplayerFeedbackBar extends StatelessWidget {
+class _MultiplayerFeedbackBar extends StatefulWidget {
   final bool isCorrect;
   final String correctAnswer;
   final bool isHost;
   final VoidCallback onNext;
 
   const _MultiplayerFeedbackBar({
+    super.key,
     required this.isCorrect,
     required this.correctAnswer,
     required this.isHost,
@@ -1146,9 +1173,39 @@ class _MultiplayerFeedbackBar extends StatelessWidget {
   });
 
   @override
+  State<_MultiplayerFeedbackBar> createState() => _MultiplayerFeedbackBarState();
+}
+
+class _MultiplayerFeedbackBarState extends State<_MultiplayerFeedbackBar> {
+  // null = not counting down, 2/1 = counting, 0 = fired
+  int? _countdown;
+  Timer? _countdownTimer;
+
+  void _startCountdown() {
+    if (_countdown != null) return; // already running
+    setState(() => _countdown = 2);
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _countdown = (_countdown! - 1));
+      if (_countdown == 0) {
+        _countdownTimer?.cancel();
+        widget.onNext(); // fire RTDB advance only after local delay
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final color = isCorrect ? AppColors.answerCorrect : AppColors.answerWrong;
+    final color = widget.isCorrect ? AppColors.answerCorrect : AppColors.answerWrong;
+    final isCounting = _countdown != null && _countdown! > 0;
+
     return AnimatedContainer(
       duration: AppDimens.animNormal,
       padding: const EdgeInsets.fromLTRB(
@@ -1164,7 +1221,7 @@ class _MultiplayerFeedbackBar extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            isCorrect ? Icons.check_circle_rounded : Icons.cancel_rounded,
+            widget.isCorrect ? Icons.check_circle_rounded : Icons.cancel_rounded,
             color: color,
             size: 28,
           ),
@@ -1175,7 +1232,7 @@ class _MultiplayerFeedbackBar extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  isCorrect ? l10n.correct : l10n.incorrect,
+                  widget.isCorrect ? l10n.correct : l10n.incorrect,
                   style: TextStyle(
                     fontFamily: 'Nunito',
                     fontWeight: FontWeight.w800,
@@ -1183,23 +1240,25 @@ class _MultiplayerFeedbackBar extends StatelessWidget {
                     color: color,
                   ),
                 ),
-                if (!isCorrect)
+                if (!widget.isCorrect)
                   Text(
-                    '${l10n.tr(en: "Correct answer", ru: "Правильный ответ", kz: "Дұрыс жауап")}: $correctAnswer',
+                    '${l10n.tr(en: "Correct answer", ru: "Правильный ответ", kz: "Дұрыс жауап")}: ${widget.correctAnswer}',
                     style: TextStyle(fontFamily: 'Nunito', fontSize: 13, color: color),
                   ),
-                if (isCorrect && !isHost)
+                // Countdown label replaces the "Waiting..." text when active
+                if (isCounting)
                   Text(
                     l10n.tr(
-                      en: 'Waiting for others...',
-                      ru: 'Ждём остальных...',
-                      kz: 'Басқаларды күтеміз...',
+                      en: 'Next question in $_countdown…',
+                      ru: 'Следующий вопрос через $_countdown…',
+                      kz: 'Келесі сұрақ $_countdown сек...',
                     ),
-                    style: const TextStyle(
-                      fontFamily: 'Nunito', fontSize: 13, color: AppColors.textSecondary,
+                    style: TextStyle(
+                      fontFamily: 'Nunito', fontSize: 13,
+                      fontWeight: FontWeight.w700, color: color,
                     ),
-                  ),
-                if (!isCorrect && !isHost)
+                  )
+                else if (!widget.isHost)
                   Text(
                     l10n.tr(
                       en: 'Waiting for others...',
@@ -1213,18 +1272,38 @@ class _MultiplayerFeedbackBar extends StatelessWidget {
               ],
             ),
           ),
-          if (isHost)
-            ElevatedButton(
-              onPressed: onNext,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: color,
-                minimumSize: const Size(80, 44),
-              ),
-              child: Text(
-                l10n.tr(en: 'Next →', ru: 'Далее →', kz: 'Келесі →'),
-                style: const TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w700),
-              ),
-            )
+          if (widget.isHost)
+            // Button becomes a live countdown badge once tapped
+            isCounting
+                ? Container(
+                    width: 80,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(AppDimens.radiusRound),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '$_countdown',
+                      style: TextStyle(
+                        fontFamily: 'Nunito',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 22,
+                        color: color,
+                      ),
+                    ),
+                  )
+                : ElevatedButton(
+                    onPressed: _startCountdown,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: color,
+                      minimumSize: const Size(80, 44),
+                    ),
+                    child: Text(
+                      l10n.tr(en: 'Next →', ru: 'Далее →', kz: 'Келесі →'),
+                      style: const TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.w700),
+                    ),
+                  )
           else
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
