@@ -10,13 +10,12 @@ import '../models/models.dart';
 
 class MultiplayerRepository {
   FirebaseDatabase get _rtdb => FirebaseDatabase.instanceFor(
-    app: Firebase.app(),
-    databaseURL: dotenv.env['RTDB_URL']!,
-  );
+        app: Firebase.app(),
+        databaseURL: dotenv.env['RTDB_URL']!,
+      );
   final _uuid = const Uuid();
 
-  DatabaseReference _roomRef(String roomId) =>
-      _rtdb.ref('rooms/$roomId');
+  DatabaseReference _roomRef(String roomId) => _rtdb.ref('rooms/$roomId');
 
   Future<String> createRoom({
     required String hostUid,
@@ -41,7 +40,18 @@ class MultiplayerRepository {
       createdAt: DateTime.now(),
     );
     await _roomRef(roomId).set(room.toMap());
+    
+    await _rtdb.ref('rooms/$roomId').onDisconnect().remove();
+    await _rtdb.ref('chats/$roomId').onDisconnect().remove();
+
     return roomId;
+  }
+
+  Future<void> deleteRoomData(String roomId) async {
+    await _rtdb.ref().update({
+      'rooms/$roomId': null,
+      'chats/$roomId': null,
+    });
   }
 
   Future<RoomModel?> joinRoom({
@@ -63,26 +73,20 @@ class MultiplayerRepository {
     }
 
     final player = RoomPlayer(uid: uid, displayName: displayName);
-    await _roomRef(roomId)
-        .child('players/$uid')
-        .set(player.toMap());
+    await _roomRef(roomId).child('players/$uid').set(player.toMap());
 
     return room.copyWith(players: [...room.players, player]);
   }
 
   Stream<RoomModel> watchRoom(String roomId) {
     return _roomRef(roomId).onValue.map((event) {
-      final data =
-          Map<String, dynamic>.from(event.snapshot.value as Map);
+      final data = Map<String, dynamic>.from(event.snapshot.value as Map);
       return RoomModel.fromMap(roomId, data);
     });
   }
 
-  Future<void> setPlayerReady(
-      String roomId, String uid, bool isReady) async {
-    await _roomRef(roomId)
-        .child('players/$uid/isReady')
-        .set(isReady);
+  Future<void> setPlayerReady(String roomId, String uid, bool isReady) async {
+    await _roomRef(roomId).child('players/$uid/isReady').set(isReady);
   }
 
   Future<void> startGame(String roomId) async {
@@ -90,18 +94,12 @@ class MultiplayerRepository {
     await _roomRef(roomId).child('currentQuestionIndex').set(0);
   }
 
-  Future<void> advanceQuestion(
-      String roomId, int nextIndex) async {
-    await _roomRef(roomId)
-        .child('currentQuestionIndex')
-        .set(nextIndex);
+  Future<void> advanceQuestion(String roomId, int nextIndex) async {
+    await _roomRef(roomId).child('currentQuestionIndex').set(nextIndex);
   }
 
-  Future<void> updatePlayerScore(
-      String roomId, String uid, int score) async {
-    await _roomRef(roomId)
-        .child('players/$uid/score')
-        .set(score);
+  Future<void> updatePlayerScore(String roomId, String uid, int score) async {
+    await _roomRef(roomId).child('players/$uid/score').set(score);
   }
 
   Future<void> finishGame(String roomId) async {
@@ -170,12 +168,11 @@ extension on RoomModel {
 
 class ChatRepository {
   FirebaseDatabase get _rtdb => FirebaseDatabase.instanceFor(
-    app: Firebase.app(),
-    databaseURL: dotenv.env['RTDB_URL']!,
-  );
+        app: Firebase.app(),
+        databaseURL: dotenv.env['RTDB_URL']!,
+      );
 
-  DatabaseReference _chatRef(String roomId) =>
-      _rtdb.ref('chats/$roomId');
+  DatabaseReference _chatRef(String roomId) => _rtdb.ref('chats/$roomId');
 
   Stream<List<ChatMessage>> watchMessages(String roomId) {
     return _chatRef(roomId)
@@ -184,11 +181,10 @@ class ChatRepository {
         .onValue
         .map((event) {
       if (!event.snapshot.exists) return [];
-      final data =
-          Map<String, dynamic>.from(event.snapshot.value as Map);
+      final data = Map<String, dynamic>.from(event.snapshot.value as Map);
       return data.entries
-          .map((e) => ChatMessage.fromMap(
-              e.key, Map<String, dynamic>.from(e.value)))
+          .map((e) =>
+              ChatMessage.fromMap(e.key, Map<String, dynamic>.from(e.value)))
           .toList()
         ..sort((a, b) => a.sentAt.compareTo(b.sentAt));
     });
@@ -224,8 +220,8 @@ class ChatRepository {
       // exceeds a lower threshold (0.5) for stricter moderation
       final flagged = result?['flagged'] == true;
       final scores = result?['category_scores'] as Map<String, dynamic>?;
-      final highScore = scores?.values
-          .any((score) => (score as num) > 0.1) ?? false;
+      final highScore =
+          scores?.values.any((score) => (score as num) > 0.1) ?? false;
 
       final shouldBlock = flagged || highScore;
       print('[Moderation] Flagged: $flagged, HighScore: $highScore');
@@ -242,9 +238,8 @@ class ChatRepository {
     required String senderName,
     required String text,
   }) async {
-    final truncated = text.trim().length > 140
-        ? text.trim().substring(0, 140)
-        : text.trim();
+    final truncated =
+        text.trim().length > 140 ? text.trim().substring(0, 140) : text.trim();
 
     if (truncated.isEmpty) return;
 

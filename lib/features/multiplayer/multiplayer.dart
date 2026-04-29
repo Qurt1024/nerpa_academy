@@ -171,6 +171,7 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
       emit(RoomError(e.toString()));
     }
   }
+  
 
   Future<void> _onJoin(JoinRoomRequested event, Emitter<RoomState> emit) async {
     emit(RoomLoading());
@@ -338,18 +339,43 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
     _roomSub = _mpRepo.watchRoom(roomId).listen((room) => add(RoomUpdated(room)));
   }
 
-  Future<void> _onLeave(LeaveRoomRequested event, Emitter<RoomState> emit) async {
+    Future<void> _onLeave(LeaveRoomRequested event, Emitter<RoomState> emit) async {
     _timer?.cancel();
     _roomSub?.cancel();
+ 
     if (_currentRoomId != null) {
-      await _mpRepo.leaveRoom(_currentRoomId!, currentUid);
+      final roomId = _currentRoomId!;
+ 
+      // Determine host status from whatever state we're currently in.
+      final currentState = state;
+      final String? hostUid = switch (currentState) {
+        RoomWaiting s    => s.room.hostUid,
+        RoomPlaying s    => s.room.hostUid,
+        RoomFinished s   => s.room.hostUid,
+        _                => null,
+      };
+      final bool isHost = hostUid == currentUid;
+ 
+      // Always remove the player entry first.
+      await _mpRepo.leaveRoom(roomId, currentUid);
+ 
+      // Host is responsible for tearing down the shared data.
+      // This covers three scenarios:
+      //   • Host leaves waiting room (abandoned room)
+      //   • Host leaves mid-game   (abandoned game)
+      //   • Host leaves after results screen (normal finish)
+      if (isHost) {
+        await _mpRepo.deleteRoomData(roomId);
+      }
     }
+ 
     _currentRoomId = null;
     _questions = [];
     _timerQuestionIndex = -1;
     _loadingQuestions = false;
     emit(RoomInitial());
   }
+
 
   String? get currentRoomId => _currentRoomId;
 
